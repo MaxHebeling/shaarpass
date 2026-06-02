@@ -12,9 +12,9 @@ export function Footer() {
         </div>
         <p className="text-sm text-muted">Te quedas con más de cada boleto.</p>
         <div className="flex gap-6 text-sm text-muted">
-          <a href="#" className="transition hover:text-fg">Términos</a>
-          <a href="#" className="transition hover:text-fg">Privacidad</a>
-          <a href="#" className="transition hover:text-fg">Contacto</a>
+          <a href="/descubrir" className="transition hover:text-fg">Descubrir</a>
+          <a href="/login" className="transition hover:text-fg">Entrar</a>
+          <a href="mailto:hola@shaarpass.io" className="transition hover:text-fg">Contacto</a>
         </div>
       </div>
       <p className="mt-8 text-center text-xs text-muted/60">

@@ -33,9 +33,9 @@ export function ValueProps() {
               whileInView={{ opacity: 1, y: 0 }}
               viewport={{ once: true, margin: "-60px" }}
               transition={{ delay: (i % 3) * 0.08, duration: 0.5 }}
-              className="glass group rounded-3xl p-6 transition hover:border-white/20"
+              className="ring-grad lift glass group rounded-3xl p-6"
             >
-              <div className="brand-gradient mb-4 grid h-11 w-11 place-items-center rounded-2xl text-ink shadow-lg shadow-fuchsia/20">
+              <div className="brand-gradient mb-4 grid h-12 w-12 place-items-center rounded-2xl text-ink shadow-lg shadow-fuchsia/30 transition group-hover:scale-110">
                 <it.icon className="h-5 w-5" strokeWidth={2.4} />
               </div>
               <h3 className="font-display text-lg font-semibold">{it.title}</h3>

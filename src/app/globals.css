@@ -91,3 +91,81 @@ body {
   0% { background-position: -200% 0; }
   100% { background-position: 200% 0; }
 }
+
+/* ============================================================
+   Utilidades premium (acabado profesional)
+   ============================================================ */
+
+/* Texto con brillo sutil para números/acentos clave */
+.text-glow {
+  text-shadow: 0 0 28px rgba(214, 33, 155, 0.35), 0 0 8px rgba(245, 196, 81, 0.18);
+}
+
+/* Borde con gradiente de marca (sin pintar el fondo) */
+.ring-grad {
+  position: relative;
+}
+.ring-grad::before {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(168, 85, 247, 0.6), rgba(214, 33, 155, 0.35) 45%, rgba(245, 196, 81, 0.5));
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  opacity: 0.65;
+  transition: opacity 0.3s ease;
+}
+.ring-grad:hover::before { opacity: 1; }
+
+/* Glow detrás de un elemento (halo de marca) */
+.halo {
+  position: relative;
+}
+.halo::after {
+  content: "";
+  position: absolute;
+  inset: -30%;
+  background: radial-gradient(closest-side, rgba(214, 33, 155, 0.28), transparent 70%);
+  filter: blur(30px);
+  z-index: -1;
+  pointer-events: none;
+}
+
+/* Lift al pasar el cursor */
+.lift { transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.35s ease; }
+.lift:hover { transform: translateY(-4px); box-shadow: 0 24px 60px -28px rgba(214, 33, 155, 0.45); }
+
+/* Línea divisoria con desvanecido */
+.hairline {
+  height: 1px;
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.12), transparent);
+}
+
+/* Marquee continuo para banda de categorías */
+@keyframes marquee {
+  from { transform: translateX(0); }
+  to { transform: translateX(-50%); }
+}
+.marquee-track {
+  display: flex;
+  width: max-content;
+  animation: marquee 28s linear infinite;
+}
+.marquee-mask {
+  -webkit-mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+  mask: linear-gradient(90deg, transparent, #000 12%, #000 88%, transparent);
+}
+
+/* Patrón de rejilla tenue para fondos de sección */
+.grid-bg {
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.035) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+  background-size: 56px 56px;
+  -webkit-mask: radial-gradient(70% 60% at 50% 40%, #000, transparent);
+  mask: radial-gradient(70% 60% at 50% 40%, #000, transparent);
+}

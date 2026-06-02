@@ -23,12 +23,13 @@ export function FinalCTA() {
             Crea tu primer evento gratis hoy. Sin tarjeta, sin compromiso, sin letra chica.
           </p>
           <a
-            href="#"
+            href="/login"
             className="brand-gradient group mt-9 inline-flex items-center gap-2 rounded-full px-8 py-4 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]"
           >
             Crear mi evento gratis
             <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
           </a>
+          <p className="mt-5 text-xs text-muted">Publicar es gratis · sin tarjeta · sin mensualidad</p>
         </div>
       </motion.div>
     </section>

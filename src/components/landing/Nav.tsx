@@ -20,10 +20,10 @@ export function Nav() {
     >
       <div
         className={`mx-auto flex max-w-6xl items-center justify-between rounded-full px-5 transition-all duration-300 ${
-          scrolled ? "glass py-2.5" : "py-2"
+          scrolled ? "glass py-2.5 shadow-2xl shadow-black/40" : "py-2"
         }`}
       >
-        <a href="#" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
+        <a href="/" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
           <span className="brand-gradient grid h-8 w-8 place-items-center rounded-xl text-ink shadow-lg shadow-fuchsia/30">
             <Ticket className="h-4 w-4" strokeWidth={2.5} />
           </span>
@@ -38,11 +38,11 @@ export function Nav() {
         </nav>
 
         <div className="flex items-center gap-3">
-          <a href="#" className="hidden text-sm text-muted transition hover:text-fg sm:block">
+          <a href="/login" className="hidden text-sm text-muted transition hover:text-fg sm:block">
             Entrar
           </a>
           <a
-            href="#crear"
+            href="/login"
             className="brand-gradient rounded-full px-4 py-2 text-sm font-semibold text-ink shadow-lg shadow-fuchsia/20 transition hover:scale-[1.03]"
           >
             Crear evento
