@@ -27,6 +27,21 @@ export async function POST(req: Request) {
   switch (event.type) {
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
+
+      // Reventa fan-to-fan: transfiere el boleto al comprador (registra payout al vendedor).
+      if (pi.metadata?.kind === "resale" && pi.metadata?.listing_id) {
+        const buyer = pi.metadata.buyer_email;
+        const { data: newToken } = await db.rpc("buy_listing", { p_listing: pi.metadata.listing_id, p_buyer_email: buyer });
+        if (newToken) {
+          try {
+            const { sendBulkEmail } = await import("@/lib/email/campaigns");
+            const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3007";
+            await sendBulkEmail([buyer], "Compraste un boleto en reventa (ShaarPass)", `Tu boleto seguro: ${base}/t/${newToken}`);
+          } catch { /* best-effort */ }
+        }
+        break;
+      }
+
       const orderId = pi.metadata?.order_id;
       if (orderId) {
         // confirm_order_paid es idempotente: webhook duplicado = no-op.

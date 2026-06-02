@@ -9,6 +9,7 @@ import { SalesMap, type SalesZone } from "@/components/event/SalesMap";
 import { WaitlistForm } from "@/components/event/WaitlistForm";
 import { QueueGate } from "@/components/event/QueueGate";
 import { PresaleRegister } from "@/components/event/PresaleRegister";
+import { ResaleListings, type ResaleItem } from "@/components/event/ResaleListings";
 
 export const dynamic = "force-dynamic";
 
@@ -141,6 +142,12 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
   }
   const hasVenueMap = salesZones.length > 0;
 
+  // Reventa fan-to-fan activa (precio justo).
+  const { data: listingRows } = await db
+    .from("listings").select("id, price_cents").eq("event_id", event.id).eq("status", "active")
+    .order("price_cents", { ascending: true });
+  const resaleListings: ResaleItem[] = (listingRows ?? []).map((l) => ({ id: l.id, priceCents: l.price_cents }));
+
   const venueLine = [event.venues?.name, event.venues?.city ?? event.city, event.region]
     .filter(Boolean)
     .join(", ");
@@ -239,6 +246,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             )}
           </QueueGate>
           {event.presale_enabled && <PresaleRegister eventId={event.id} />}
+          <ResaleListings currency={event.currency} listings={resaleListings} />
           <WaitlistForm eventId={event.id} />
         </aside>
       </div>
