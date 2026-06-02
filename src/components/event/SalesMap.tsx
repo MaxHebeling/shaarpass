@@ -4,6 +4,7 @@ import { useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, ArrowLeft, Ticket } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
+import { CanvasSeatLayer } from "@/components/event/CanvasSeatLayer";
 import { money } from "@/lib/money";
 import { ourFeeCents } from "@/lib/ticketing/feeMath";
 
@@ -116,23 +117,34 @@ export function SalesMap({
             <ArrowLeft className="h-4 w-4" /> Zonas
           </button>
           <h3 className="font-display text-lg font-semibold" style={{ color: openZone.color }}>{openZone.name} · {money(openZone.priceCents, currency)}</h3>
-          <div className="relative mt-3 max-h-[55vh] overflow-auto rounded-2xl bg-ink-2 p-2">
+          <div className="relative mt-3 rounded-2xl bg-ink-2 p-2">
             {loadingSeats ? (
               <div className="grid h-40 place-items-center text-muted"><Loader2 className="h-6 w-6 animate-spin" /></div>
+            ) : seats.length > 800 ? (
+              // Zona mega-densa → Canvas con culling (pan/zoom con rueda y arrastre).
+              <CanvasSeatLayer
+                seats={seats.map((s) => ({ id: s.id, x: s.x, y: s.y, status: s.status, label: s.label }))}
+                baseColor={openZone.color}
+                selected={new Set(Object.keys(selected))}
+                onToggle={(id) => { const s = seats.find((x) => x.id === id); if (s) toggle(s); }}
+              />
             ) : (
-              <svg viewBox={seatViewBox(seats)} className="w-full" style={{ minHeight: 200 }}>
-                {seats.map((s) => {
-                  const sel = !!selected[s.id]; const sold = s.status !== "available";
-                  return (
-                    <circle key={s.id} cx={s.x} cy={s.y} r={0.4} onClick={() => toggle(s)}
-                      fill={sold ? "#3a3a4a" : sel ? "#f5c451" : openZone.color}
-                      fillOpacity={sold ? 0.5 : 1} style={{ cursor: sold ? "not-allowed" : "pointer" }}>
-                      <title>{openZone.name} {s.label}{sold ? " (ocupado)" : ""}</title>
-                    </circle>
-                  );
-                })}
-              </svg>
+              <div className="max-h-[55vh] overflow-auto">
+                <svg viewBox={seatViewBox(seats)} className="w-full" style={{ minHeight: 200 }}>
+                  {seats.map((s) => {
+                    const sel = !!selected[s.id]; const sold = s.status !== "available";
+                    return (
+                      <circle key={s.id} cx={s.x} cy={s.y} r={0.4} onClick={() => toggle(s)}
+                        fill={sold ? "#3a3a4a" : sel ? "#f5c451" : openZone.color}
+                        fillOpacity={sold ? 0.5 : 1} style={{ cursor: sold ? "not-allowed" : "pointer" }}>
+                        <title>{openZone.name} {s.label}{sold ? " (ocupado)" : ""}</title>
+                      </circle>
+                    );
+                  })}
+                </svg>
+              </div>
             )}
+            {seats.length > 800 && <p className="mt-1 text-center text-[11px] text-muted">Rueda para zoom · arrastra para mover · {seats.length.toLocaleString("es-MX")} asientos</p>}
           </div>
         </>
       )}
