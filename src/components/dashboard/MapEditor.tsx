@@ -2,8 +2,9 @@
 
 import { useMemo, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { MousePointer2, PencilRuler, Trash2, Rocket, Loader2, Armchair, X } from "lucide-react";
-import { saveZone, generateZoneSeats, deleteZone, publishMap } from "@/app/dashboard/recintos/actions";
+import { MousePointer2, PencilRuler, Trash2, Rocket, Loader2, Armchair, X, ImageUp, Ruler } from "lucide-react";
+import { saveZone, generateZoneSeats, deleteZone, publishMap, setMapBackground, recalibrateMap } from "@/app/dashboard/recintos/actions";
+import { createClient } from "@/lib/supabase/browser";
 
 export interface EditorZone { id: string; name: string; kind: string; color: string; gaCapacity: number | null; points: [number, number][]; }
 export interface EditorSeat { id: string; zoneId: string; label: string; x: number; y: number; }
@@ -15,14 +16,49 @@ const COLORS = ["#7c3aed", "#d6219b", "#f5c451", "#10b981", "#3b82f6", "#ef4444"
 export function MapEditor({
   mapId, widthM, heightM, status, backgroundUrl, initialZones, initialSeats,
 }: { mapId: string; widthM: number; heightM: number; status: string; backgroundUrl: string | null; initialZones: EditorZone[]; initialSeats: EditorSeat[]; }) {
-  const [mode, setMode] = useState<"select" | "draw">("select");
+  const [mode, setMode] = useState<"select" | "draw" | "calibrate">("select");
   const [draft, setDraft] = useState<[number, number][]>([]);
   const [pendingPoints, setPendingPoints] = useState<[number, number][] | null>(null);
   const [selectedZone, setSelectedZone] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
   const svgRef = useRef<SVGSVGElement>(null);
+  const fileRef = useRef<HTMLInputElement>(null);
   const router = useRouter();
+  // Captura: calibración + upload de plano
+  const [calibPts, setCalibPts] = useState<[number, number][]>([]);
+  const [calibMeters, setCalibMeters] = useState(10);
+  const [uploading, setUploading] = useState(false);
+
+  async function uploadPlan(file: File) {
+    setUploading(true); setError(null);
+    try {
+      const db = createClient();
+      const ext = (file.name.split(".").pop() || "png").toLowerCase();
+      const path = `${mapId}/plan-${Date.now()}.${ext}`;
+      const { error: upErr } = await db.storage.from("venue-plans").upload(path, file, { upsert: true });
+      if (upErr) throw upErr;
+      const { data } = db.storage.from("venue-plans").getPublicUrl(path);
+      const res = await setMapBackground(mapId, data.publicUrl);
+      if (res?.error) throw new Error(res.error);
+      router.refresh();
+    } catch (e) { setError((e as Error).message); }
+    finally { setUploading(false); }
+  }
+
+  function applyCalibration() {
+    if (calibPts.length < 2 || calibMeters <= 0) return;
+    const [a, b] = calibPts;
+    const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+    if (d < 0.01) return;
+    const factor = calibMeters / d;
+    start(async () => {
+      const res = await recalibrateMap(mapId, factor);
+      if (res?.error) { setError(res.error); return; }
+      setCalibPts([]); setMode("select");
+      router.refresh();
+    });
+  }
 
   // form de zona nueva
   const [zName, setZName] = useState("");
@@ -49,8 +85,9 @@ export function MapEditor({
   }
 
   function onCanvasClick(e: React.MouseEvent) {
-    if (mode !== "draw") { setSelectedZone(null); return; }
-    setDraft((d) => [...d, toMeters(e)]);
+    if (mode === "draw") { setDraft((d) => [...d, toMeters(e)]); return; }
+    if (mode === "calibrate") { setCalibPts((p) => (p.length >= 2 ? [toMeters(e)] : [...p, toMeters(e)])); return; }
+    setSelectedZone(null);
   }
 
   function finishZone() {
@@ -106,6 +143,13 @@ export function MapEditor({
               Cerrar zona ({draft.length})
             </button>
           )}
+          <button onClick={() => { setMode("calibrate"); setCalibPts([]); setSelectedZone(null); }} className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-sm ${mode === "calibrate" ? "brand-gradient text-ink" : "border border-line text-muted"}`}>
+            <Ruler className="h-4 w-4" /> Calibrar
+          </button>
+          <label className="flex cursor-pointer items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 text-sm text-muted transition hover:border-white/30">
+            {uploading ? <Loader2 className="h-4 w-4 animate-spin" /> : <ImageUp className="h-4 w-4" />} Subir plano
+            <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPlan(f); }} />
+          </label>
         </div>
 
         <svg
@@ -147,9 +191,18 @@ export function MapEditor({
               {draft.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={0.3} fill="#f5c451" />)}
             </>
           )}
+          {/* línea de calibración */}
+          {calibPts.length > 0 && (
+            <>
+              <polyline points={calibPts.map((p) => p.join(",")).join(" ")} fill="none" stroke="#10b981" strokeWidth={0.2} />
+              {calibPts.map((p, i) => <circle key={i} cx={p[0]} cy={p[1]} r={0.35} fill="#10b981" />)}
+            </>
+          )}
         </svg>
         <p className="mt-2 text-xs text-muted">
-          {mode === "draw" ? "Haz clic para colocar vértices; luego “Cerrar zona”." : "Clic en una zona para seleccionarla."}
+          {mode === "draw" ? "Haz clic para colocar vértices; luego “Cerrar zona”."
+            : mode === "calibrate" ? "Sube el plano, luego marca 2 puntos de una medida conocida e indica los metros."
+            : "Clic en una zona para seleccionarla."}
         </p>
       </div>
 
@@ -168,6 +221,24 @@ export function MapEditor({
         </div>
 
         {error && <p className="text-sm text-fuchsia">{error}</p>}
+
+        {/* Calibración de escala */}
+        {mode === "calibrate" && (
+          <div className="glass rounded-2xl p-4">
+            <h3 className="mb-1 flex items-center gap-2 font-display font-semibold"><Ruler className="h-4 w-4 text-emerald-400" /> Calibrar escala</h3>
+            <p className="mb-3 text-xs text-muted">Marca 2 puntos sobre una distancia conocida del plano ({calibPts.length}/2).</p>
+            {calibPts.length === 2 && (
+              <div className="flex items-end gap-2">
+                <label className="flex-1 text-xs text-muted">Metros reales
+                  <input type="number" min={0.1} step="0.1" value={calibMeters} onChange={(e) => setCalibMeters(Number(e.target.value))} className="mt-1 w-full rounded-lg border border-line bg-surface/60 px-2.5 py-2 text-sm outline-none focus:border-fuchsia/60" />
+                </label>
+                <button onClick={applyCalibration} disabled={pending} className="brand-gradient flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-semibold text-ink disabled:opacity-50">
+                  {pending && <Loader2 className="h-4 w-4 animate-spin" />} Aplicar
+                </button>
+              </div>
+            )}
+          </div>
+        )}
 
         {/* Form de zona nueva */}
         {pendingPoints && (

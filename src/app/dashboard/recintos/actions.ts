@@ -63,6 +63,22 @@ export async function deleteZone(mapId: string, zoneId: string) {
   return { ok: true };
 }
 
+export async function setMapBackground(mapId: string, url: string) {
+  const db = await createClient();
+  const { error } = await db.from("venue_maps").update({ background_url: url }).eq("id", mapId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/recintos/${mapId}`);
+  return { ok: true };
+}
+
+export async function recalibrateMap(mapId: string, factor: number) {
+  const db = await createClient();
+  const { error } = await db.rpc("recalibrate_map", { p_map: mapId, p_factor: factor });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/recintos/${mapId}`);
+  return { ok: true };
+}
+
 export async function publishMap(mapId: string) {
   const db = await createClient();
   const { error } = await db.rpc("publish_map", { p_map: mapId });
