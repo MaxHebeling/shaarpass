@@ -9,9 +9,34 @@ import { FAQ } from "@/components/landing/FAQ";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
 
+const SITE = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
+
+const orgJsonLd = {
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "Organization",
+      "@id": `${SITE}/#organization`,
+      name: "ShaarPass",
+      url: SITE,
+      logo: `${SITE}/icon.svg`,
+      description: "Plataforma de venta de boletos para eventos con la comisión más baja y transparente del mercado.",
+    },
+    {
+      "@type": "WebSite",
+      "@id": `${SITE}/#website`,
+      url: SITE,
+      name: "ShaarPass",
+      inLanguage: "es",
+      publisher: { "@id": `${SITE}/#organization` },
+    },
+  ],
+};
+
 export default function Home() {
   return (
     <main className="grain relative">
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(orgJsonLd) }} />
       <Nav />
       <Hero />
       <MarketBand />

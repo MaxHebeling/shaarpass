@@ -1,0 +1,19 @@
+# ShaarPass
+
+> Plataforma de venta de boletos para eventos con la comisión más baja y transparente del mercado. La alternativa premium a Eventbrite, en español. Sitio: https://www.shaarpass.io
+
+ShaarPass permite a cualquier organizador (iglesias, conferencias, conciertos, deportes, teatro, festivales, talleres) crear su evento, vender boletos y cobrar a su propia cuenta el mismo día.
+
+## Qué la hace distinta
+- Comisión baja y transparente: 2% + $0.50 por boleto, más el procesamiento de pago, mostrado claramente antes de comprar. Sin cargos ocultos.
+- Eventos gratuitos: $0 de comisión.
+- Pagos a la cuenta del organizador el mismo día (vía Stripe), sin retenciones.
+- Boletos con QR seguro que rota cada 15 segundos (anti-clonación).
+- Reventa entre fans topada al precio original (sin scalping).
+- Cola virtual, límites anti-bot y mapas de recinto para eventos masivos (estadios de 50,000+).
+- Abonos de temporada y soporte humano real.
+
+## Enlaces
+- Inicio: https://www.shaarpass.io
+- Descubrir eventos: https://www.shaarpass.io/descubrir
+- Crear cuenta / organizador: https://www.shaarpass.io/login
