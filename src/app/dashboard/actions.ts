@@ -226,6 +226,19 @@ export async function sendCampaign(eventId: string, subject: string, body: strin
   return { ok: true, sent: res.sent, total: emails.length, reason: res.reason };
 }
 
+export async function setQueueConfig(form: { eventId: string; enabled: boolean; onsaleAt: string | null; waveSize: number }) {
+  const db = await createClient();
+  const { error } = await db.from("events").update({
+    queue_enabled: form.enabled,
+    onsale_at: form.onsaleAt ? new Date(form.onsaleAt).toISOString() : null,
+    queue_wave_size: Math.max(1, Math.round(form.waveSize)),
+    queue_drawn: false, // re-sortea en el próximo onsale
+  }).eq("id", form.eventId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
 export async function signOut() {
   const db = await createClient();
   await db.auth.signOut();

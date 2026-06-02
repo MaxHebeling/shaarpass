@@ -99,6 +99,7 @@ export default function CheckoutPage() {
           promoCode: promo?.code,
           items: cart.items.map((i) => ({ ticketTypeId: i.ticketTypeId, quantity: i.quantity, seatIds: i.seatIds, eventSeatIds: i.eventSeatIds })),
           services: services.filter((s) => (svcQty[s.id] ?? 0) > 0).map((s) => ({ serviceId: s.id, quantity: svcQty[s.id] })),
+          queueToken: sessionStorage.getItem(`queue:${cart.eventId}`) ?? undefined,
         }),
       });
       const data = await res.json();

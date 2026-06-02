@@ -22,6 +22,7 @@ const Body = z.object({
     }))
     .min(1),
   services: z.array(z.object({ serviceId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).optional(),
+  queueToken: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -29,7 +30,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "payload inválido" }, { status: 400 });
   }
-  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services } = parsed.data;
+  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services, queueToken } = parsed.data;
   const db = createAdminClient();
 
   // Idempotencia: si ya existe una orden con esta key, devuélvela tal cual.
@@ -45,11 +46,17 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, organizations(stripe_account_id, payouts_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, organizations(stripe_account_id, payouts_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
     return NextResponse.json({ error: "evento no disponible" }, { status: 404 });
+  }
+
+  // Cola virtual: solo compradores admitidos pueden pagar.
+  if (event.queue_enabled) {
+    const { data: ok } = await db.rpc("is_queue_admitted", { p_event: eventId, p_token: queueToken ?? "" });
+    if (!ok) return NextResponse.json({ error: "Tu turno en la cola expiró o no es válido. Vuelve a la fila." }, { status: 403 });
   }
   const org = event.organizations as unknown as { stripe_account_id: string | null; payouts_enabled: boolean };
   if (!org?.stripe_account_id || !org.payouts_enabled) {
@@ -173,6 +180,10 @@ export async function POST(req: Request) {
   }
   if (svcRows.length) {
     await db.from("order_services").insert(svcRows.map((s) => ({ order_id: order.id, ...s })));
+  }
+  // Consume el turno en la cola (ya entró a comprar).
+  if (event.queue_enabled && queueToken) {
+    await db.rpc("mark_queue_used", { p_token: queueToken });
   }
 
   // 4) PaymentIntent con destination charge: el neto va al organizador,

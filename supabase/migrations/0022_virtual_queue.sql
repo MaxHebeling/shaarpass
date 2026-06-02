@@ -1,0 +1,9 @@
+-- TM-1: Cola virtual (waiting room) para onsales de alta demanda.
+-- events: queue_enabled, onsale_at, queue_wave_size, queue_admit_minutes, queue_drawn.
+-- queue_sessions: token, identity_hash, position, status(waiting/admitted/expired/used).
+-- RPCs: join_queue (lobby/append + dedupe por identidad), queue_status (polling),
+--   is_queue_admitted (gate del checkout), mark_queue_used, admit_all_queues (cron 15s:
+--   sortea posiciones aleatorias del lobby + expira admitidos vencidos + admite oleada
+--   hasta queue_wave_size). Acceso solo vía RPC SECURITY DEFINER; RLS sin policies.
+-- NOTA escala: Postgres+cron aguanta decenas de miles; millones reales = edge (TM-1b).
+-- Cuerpo completo aplicado en el proyecto Supabase (migración 0022).

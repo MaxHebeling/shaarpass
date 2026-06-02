@@ -9,6 +9,7 @@ import { SeatBuilder, type TierOption } from "@/components/dashboard/SeatBuilder
 import { EventVenueMap, type PublishedMap, type ZonePrice } from "@/components/dashboard/EventVenueMap";
 import { ServicesManager, type ServiceRow } from "@/components/dashboard/ServicesManager";
 import { CampaignComposer } from "@/components/dashboard/CampaignComposer";
+import { QueueControl } from "@/components/dashboard/QueueControl";
 
 export const dynamic = "force-dynamic";
 
@@ -18,9 +19,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, slug, title, status, currency, starts_at")
+    .select("id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size")
     .eq("id", id)
-    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string }>();
+    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -126,6 +127,11 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
       {/* Mapa de recinto (nuevo modelo geométrico) */}
       <div className="mb-6">
         <EventVenueMap eventId={id} currency={event.currency} maps={mapOptions} attached={!!emapRow} zonePrices={zonePrices} />
+      </div>
+
+      {/* Cola virtual (alta demanda) */}
+      <div className="mb-6">
+        <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} />
       </div>
 
       {/* Email a compradores + lista de espera */}

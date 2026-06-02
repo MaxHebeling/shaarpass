@@ -7,6 +7,7 @@ import { TicketSelector, type SelectableTicket } from "@/components/event/Ticket
 import { SeatMap, type SeatData, type TierInfo } from "@/components/event/SeatMap";
 import { SalesMap, type SalesZone } from "@/components/event/SalesMap";
 import { WaitlistForm } from "@/components/event/WaitlistForm";
+import { QueueGate } from "@/components/event/QueueGate";
 
 export const dynamic = "force-dynamic";
 
@@ -45,6 +46,8 @@ interface EventRow {
   is_online: boolean;
   city: string | null;
   region: string | null;
+  queue_enabled: boolean;
+  onsale_at: string | null;
   organizations: { name: string } | null;
   venues: { name: string; address: string | null; city: string | null } | null;
 }
@@ -64,7 +67,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const { data: event } = await db
     .from("events")
-    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, organizations(name), venues(name, address, city)")
+    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, organizations(name), venues(name, address, city)")
     .eq("slug", slug)
     .eq("status", "published")
     .maybeSingle<EventRow>();
@@ -224,13 +227,15 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
         {/* Selector (sticky) */}
         <aside className="lg:sticky lg:top-24 lg:self-start">
-          {hasVenueMap ? (
-            <SalesMap eventId={event.id} eventSlug={slug} currency={event.currency} widthM={mapW} heightM={mapH} zones={salesZones} />
-          ) : isSeated ? (
-            <SeatMap eventId={event.id} eventSlug={slug} currency={event.currency} seats={seats} tiers={seatTiers} />
-          ) : (
-            <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} />
-          )}
+          <QueueGate eventId={event.id} enabled={event.queue_enabled} onsaleAt={event.onsale_at}>
+            {hasVenueMap ? (
+              <SalesMap eventId={event.id} eventSlug={slug} currency={event.currency} widthM={mapW} heightM={mapH} zones={salesZones} />
+            ) : isSeated ? (
+              <SeatMap eventId={event.id} eventSlug={slug} currency={event.currency} seats={seats} tiers={seatTiers} />
+            ) : (
+              <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} />
+            )}
+          </QueueGate>
           <WaitlistForm eventId={event.id} />
         </aside>
       </div>
