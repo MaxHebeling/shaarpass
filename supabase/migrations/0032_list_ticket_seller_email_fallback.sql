@@ -1,0 +1,4 @@
+-- list_ticket ahora puebla seller_email con coalesce(attendee.email, order.buyer_email)
+-- para que el desembolso de reventa siempre pueda identificar al vendedor (los
+-- boletos de abono no crean attendee, antes quedaban con seller_email NULL).
+-- Cuerpo completo aplicado en el proyecto Supabase (migración 0032).

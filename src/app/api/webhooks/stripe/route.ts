@@ -33,11 +33,27 @@ export async function POST(req: Request) {
         const buyer = pi.metadata.buyer_email;
         const { data: newToken } = await db.rpc("buy_listing", { p_listing: pi.metadata.listing_id, p_buyer_email: buyer });
         if (newToken) {
+          const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3007";
           try {
             const { sendBulkEmail } = await import("@/lib/email/campaigns");
-            const base = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3007";
             await sendBulkEmail([buyer], "Compraste un boleto en reventa (ShaarPass)", `Tu boleto seguro: ${base}/t/${newToken}`);
           } catch { /* best-effort */ }
+
+          // Desembolso al vendedor: avisa + paga ya si su cuenta está conectada.
+          try {
+            const { data: payout } = await db
+              .from("resale_payouts")
+              .select("id, seller_email, claim_token")
+              .eq("listing_id", pi.metadata.listing_id).eq("status", "owed")
+              .order("created_at", { ascending: false }).limit(1).maybeSingle();
+            if (payout) {
+              const { sendBulkEmail } = await import("@/lib/email/campaigns");
+              await sendBulkEmail([payout.seller_email], "Tu boleto se vendió — cobra tu dinero (ShaarPass)",
+                `¡Buenas noticias! Tu boleto en reventa se vendió. Cobra tu dinero aquí: ${base}/cobrar/${payout.claim_token}`);
+              const { processPayout } = await import("@/lib/resale/payout");
+              await processPayout(db, payout.id); // no-op si aún no conecta su cuenta
+            }
+          } catch { /* best-effort; el cron reintenta */ }
         }
         break;
       }

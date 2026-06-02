@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import { ShieldCheck, Loader2, RefreshCw, Send, Tag } from "lucide-react";
+import { SellerPayoutButton } from "@/components/resale/SellerPayoutButton";
 
 export default function MobileTicketPage() {
   const { token } = useParams<{ token: string }>();
@@ -15,6 +16,7 @@ export default function MobileTicketPage() {
   const [price, setPrice] = useState("");
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [transferred, setTransferred] = useState(false);
+  const [listed, setListed] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function doTransfer() {
@@ -28,7 +30,8 @@ export default function MobileTicketPage() {
     setBusy(true); setActionMsg(null);
     const res = await fetch("/api/ticket/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, priceCents: Math.round(Number(price) * 100) }) });
     const data = await res.json(); setBusy(false);
-    setActionMsg(res.ok ? "✅ En reventa al precio justo. Comparte el enlace de tu evento." : (data.error || "Error"));
+    if (res.ok) { setListed(true); setActionMsg("✅ En reventa al precio justo. Comparte el enlace de tu evento."); }
+    else setActionMsg(data.error || "Error");
   }
 
   async function refresh() {
@@ -98,6 +101,7 @@ export default function MobileTicketPage() {
               </div>
             )}
             {actionMsg && <p className="mt-2 text-xs text-muted">{actionMsg}</p>}
+            {listed && <SellerPayoutButton token={token} label="Conectar cuenta para cobrar cuando se venda" />}
             <p className="mt-2 text-center text-[11px] text-muted">Reventa topada al precio original · sin scalping</p>
           </div>
         )}
