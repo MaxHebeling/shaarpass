@@ -32,9 +32,9 @@ export function Nav() {
 
         <nav className="hidden items-center gap-8 text-sm text-muted md:flex">
           <a href="/descubrir" className="transition hover:text-fg">Descubrir</a>
-          <a href="#comisiones" className="transition hover:text-fg">Comisiones</a>
-          <a href="#como-funciona" className="transition hover:text-fg">Cómo funciona</a>
-          <a href="#ventajas" className="transition hover:text-fg">Ventajas</a>
+          <a href="/precios" className="transition hover:text-fg">Precios</a>
+          <a href="/como-funciona" className="transition hover:text-fg">Cómo funciona</a>
+          <a href="/nosotros" className="transition hover:text-fg">Nosotros</a>
         </nav>
 
         <div className="flex items-center gap-3">

@@ -11,8 +11,11 @@ export function Footer() {
           ShaarPass
         </div>
         <p className="text-sm text-muted">Te quedas con más de cada boleto.</p>
-        <div className="flex gap-6 text-sm text-muted">
+        <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 text-sm text-muted">
           <a href="/descubrir" className="transition hover:text-fg">Descubrir</a>
+          <a href="/precios" className="transition hover:text-fg">Precios</a>
+          <a href="/como-funciona" className="transition hover:text-fg">Cómo funciona</a>
+          <a href="/nosotros" className="transition hover:text-fg">Nosotros</a>
           <a href="/login" className="transition hover:text-fg">Entrar</a>
           <a href="mailto:hola@shaarpass.io" className="transition hover:text-fg">Contacto</a>
         </div>
