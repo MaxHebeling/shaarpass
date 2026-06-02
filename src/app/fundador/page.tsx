@@ -39,7 +39,7 @@ export default function FundadorPage() {
               Si entras, te acompañamos de cerca y te montamos tu primer evento sin costo.
             </p>
             <a
-              href="mailto:hola@shaarpass.io?subject=Quiero%20ser%20Organizador%20Fundador&body=Hola%2C%20me%20interesa%20el%20programa.%20Mi%20pr%C3%B3ximo%20evento%20es%3A%20%5Bnombre%2C%20fecha%2C%20lugar%5D"
+              href="mailto:tickets@shaarpass.io?subject=Quiero%20ser%20Organizador%20Fundador&body=Hola%2C%20me%20interesa%20el%20programa.%20Mi%20pr%C3%B3ximo%20evento%20es%3A%20%5Bnombre%2C%20fecha%2C%20lugar%5D"
               className="brand-gradient group mt-9 inline-flex items-center gap-2 rounded-full px-8 py-4 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]"
             >
               Quiero ser Fundador <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -78,7 +78,7 @@ export default function FundadorPage() {
         <section className="mx-auto mt-16 max-w-2xl text-center">
           <h2 className="font-display text-3xl font-bold md:text-4xl">¿Tienes un evento en puerta?</h2>
           <a
-            href="mailto:hola@shaarpass.io?subject=Quiero%20ser%20Organizador%20Fundador"
+            href="mailto:tickets@shaarpass.io?subject=Quiero%20ser%20Organizador%20Fundador"
             className="brand-gradient group mt-7 inline-flex items-center gap-2 rounded-full px-8 py-4 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]"
           >
             Postular como Fundador <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />

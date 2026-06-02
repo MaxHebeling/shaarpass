@@ -55,7 +55,7 @@ export default function ReembolsosPage() {
       <div className="space-y-3"><H>5. Contacto</H>
         <p>
           Para dudas sobre un reembolso que no puedas resolver con el organizador, escríbenos a{" "}
-          <a href="mailto:hola@shaarpass.io" className="brand-text">hola@shaarpass.io</a>. Consulta también nuestros{" "}
+          <a href="mailto:tickets@shaarpass.io" className="brand-text">tickets@shaarpass.io</a>. Consulta también nuestros{" "}
           <Link href="/terminos" className="brand-text">Términos</Link>.
         </p>
       </div>

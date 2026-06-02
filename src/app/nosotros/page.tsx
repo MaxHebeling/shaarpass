@@ -89,7 +89,7 @@ export default function NosotrosPage() {
           <h2 className="font-display text-3xl font-bold md:text-4xl">¿Hablamos?</h2>
           <p className="mt-3 text-muted">
             ¿Tienes un evento en puerta o quieres que te ayudemos a montarlo? Escríbenos a{" "}
-            <a href="mailto:hola@shaarpass.io" className="brand-text font-semibold">hola@shaarpass.io</a>.
+            <a href="mailto:tickets@shaarpass.io" className="brand-text font-semibold">tickets@shaarpass.io</a>.
           </p>
           <Link href="/login" className="brand-gradient group mt-7 inline-flex items-center gap-2 rounded-full px-8 py-4 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]">
             Crear mi evento gratis <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />

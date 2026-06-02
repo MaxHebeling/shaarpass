@@ -53,7 +53,7 @@ export default function PrivacidadPage() {
         <p>
           Puedes solicitar el Acceso, Rectificación, Cancelación u Oposición al tratamiento de tus datos, así como
           revocar tu consentimiento, escribiendo a{" "}
-          <a href="mailto:hola@shaarpass.io" className="brand-text">hola@shaarpass.io</a>. Para dejar de recibir
+          <a href="mailto:tickets@shaarpass.io" className="brand-text">tickets@shaarpass.io</a>. Para dejar de recibir
           correos de marketing, usa el enlace &ldquo;darte de baja&rdquo; al pie de cada correo.
         </p>
       </div>
@@ -76,7 +76,7 @@ export default function PrivacidadPage() {
       <div className="space-y-3"><H>7. Cambios y contacto</H>
         <p>
           Podemos actualizar este aviso; publicaremos la versión vigente con su fecha. Para cualquier asunto de
-          privacidad, contáctanos en <a href="mailto:hola@shaarpass.io" className="brand-text">hola@shaarpass.io</a>.
+          privacidad, contáctanos en <a href="mailto:tickets@shaarpass.io" className="brand-text">tickets@shaarpass.io</a>.
         </p>
       </div>
     </LegalLayout>

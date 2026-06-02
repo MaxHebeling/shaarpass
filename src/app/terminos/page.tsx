@@ -119,7 +119,7 @@ export default function TerminosPage() {
       <div className="space-y-3"><H>12. Ley aplicable y contacto</H>
         <p>
           Estos Términos se rigen por las leyes de los Estados Unidos Mexicanos. Para cualquier duda escríbenos a{" "}
-          <a href="mailto:hola@shaarpass.io" className="brand-text">hola@shaarpass.io</a>.
+          <a href="mailto:tickets@shaarpass.io" className="brand-text">tickets@shaarpass.io</a>.
         </p>
       </div>
     </LegalLayout>

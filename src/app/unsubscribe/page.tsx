@@ -33,7 +33,7 @@ export default async function UnsubscribePage({ searchParams }: { searchParams: 
             <h1 className="mt-4 font-display text-2xl font-bold">Enlace no válido</h1>
             <p className="mt-2 text-sm text-muted">
               No pudimos procesar la baja. Escríbenos a{" "}
-              <a href="mailto:hola@shaarpass.io" className="brand-text">hola@shaarpass.io</a> y lo hacemos por ti.
+              <a href="mailto:tickets@shaarpass.io" className="brand-text">tickets@shaarpass.io</a> y lo hacemos por ti.
             </p>
           </>
         )}

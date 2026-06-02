@@ -16,7 +16,7 @@ export function Footer() {
           <a href="/login" className="transition hover:text-fg">Entrar</a>
           <a href="/terminos" className="transition hover:text-fg">Términos</a>
           <a href="/privacidad" className="transition hover:text-fg">Privacidad</a>
-          <a href="mailto:hola@shaarpass.io" className="transition hover:text-fg">Contacto</a>
+          <a href="mailto:tickets@shaarpass.io" className="transition hover:text-fg">Contacto</a>
         </div>
       </div>
       <p className="mt-8 text-center text-xs text-muted/60">
