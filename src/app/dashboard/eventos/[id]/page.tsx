@@ -8,6 +8,7 @@ import { OrdersPanel, type OrderRow } from "@/components/dashboard/OrdersPanel";
 import { SeatBuilder, type TierOption } from "@/components/dashboard/SeatBuilder";
 import { EventVenueMap, type PublishedMap, type ZonePrice } from "@/components/dashboard/EventVenueMap";
 import { ServicesManager, type ServiceRow } from "@/components/dashboard/ServicesManager";
+import { CampaignComposer } from "@/components/dashboard/CampaignComposer";
 
 export const dynamic = "force-dynamic";
 
@@ -77,6 +78,10 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     .from("services").select("id, name, kind, price_cents, inventory, sold, max_per_order")
     .eq("event_id", id).order("created_at").returns<ServiceRow[]>();
 
+  const { data: buyerRows } = await db.from("orders").select("buyer_email").eq("event_id", id).eq("status", "paid");
+  const buyersCount = new Set((buyerRows ?? []).map((o) => o.buyer_email)).size;
+  const { count: waitlistCount } = await db.from("waitlist").select("id", { count: "exact", head: true }).eq("event_id", id);
+
   return (
     <div className="mx-auto max-w-3xl">
       <Link href="/dashboard" className="mb-5 flex items-center gap-2 text-sm text-muted transition hover:text-fg">
@@ -121,6 +126,11 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
       {/* Mapa de recinto (nuevo modelo geométrico) */}
       <div className="mb-6">
         <EventVenueMap eventId={id} currency={event.currency} maps={mapOptions} attached={!!emapRow} zonePrices={zonePrices} />
+      </div>
+
+      {/* Email a compradores + lista de espera */}
+      <div className="mb-6">
+        <CampaignComposer eventId={id} buyers={buyersCount} waitlistCount={waitlistCount ?? 0} />
       </div>
 
       {/* Servicios / extras */}

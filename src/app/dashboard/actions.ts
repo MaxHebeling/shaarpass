@@ -209,6 +209,23 @@ export async function deleteService(serviceId: string, eventId: string) {
   return { ok: true };
 }
 
+export async function sendCampaign(eventId: string, subject: string, body: string) {
+  const { sendBulkEmail } = await import("@/lib/email/campaigns");
+  const db = await createClient();
+  if (!subject.trim() || !body.trim()) return { error: "Asunto y mensaje requeridos" };
+
+  // Compradores únicos de órdenes pagadas (RLS: solo miembros de la org ven las órdenes).
+  const { data: orders } = await db
+    .from("orders").select("buyer_email").eq("event_id", eventId).eq("status", "paid");
+  const emails = Array.from(new Set((orders ?? []).map((o) => o.buyer_email).filter(Boolean)));
+  if (emails.length === 0) return { error: "Aún no hay compradores a quién enviar" };
+
+  const res = await sendBulkEmail(emails, subject.trim(), body.trim());
+  await db.from("email_campaigns").insert({ event_id: eventId, subject: subject.trim(), body: body.trim(), recipients: res.sent });
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true, sent: res.sent, total: emails.length, reason: res.reason };
+}
+
 export async function signOut() {
   const db = await createClient();
   await db.auth.signOut();

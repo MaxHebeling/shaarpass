@@ -18,7 +18,7 @@ export async function POST(req: Request) {
   // RLS: solo miembros del org ven la orden.
   const { data: order } = await db
     .from("orders")
-    .select("id, status, stripe_payment_intent_id")
+    .select("id, status, stripe_payment_intent_id, event_id, events(title)")
     .eq("id", parsed.data.orderId)
     .maybeSingle();
   if (!order) return NextResponse.json({ error: "Orden no encontrada o sin permiso" }, { status: 404 });
@@ -37,5 +37,25 @@ export async function POST(req: Request) {
   const { error } = await db.rpc("refund_order", { p_order_id: order.id });
   if (error) return NextResponse.json({ error: error.message }, { status: 403 });
 
-  return NextResponse.json({ ok: true });
+  // 3) Se liberó cupo → notifica a la lista de espera (best-effort, no bloquea).
+  let notified = 0;
+  try {
+    const { data: wl } = await db
+      .from("waitlist").select("id, email")
+      .eq("event_id", order.event_id).is("notified_at", null)
+      .order("created_at", { ascending: true }).limit(20);
+    if (wl?.length) {
+      const { sendBulkEmail } = await import("@/lib/email/campaigns");
+      const title = (order.events as unknown as { title: string } | null)?.title ?? "el evento";
+      const res = await sendBulkEmail(
+        wl.map((w) => w.email),
+        `¡Se liberaron lugares para ${title}!`,
+        `Buenas noticias: se liberó cupo para ${title}. Corre a comprar tu boleto antes de que se agote de nuevo.`
+      );
+      notified = res.sent;
+      await db.from("waitlist").update({ notified_at: new Date().toISOString() }).in("id", wl.map((w) => w.id));
+    }
+  } catch (e) { console.error("[waitlist] notify error", (e as Error).message); }
+
+  return NextResponse.json({ ok: true, waitlistNotified: notified });
 }

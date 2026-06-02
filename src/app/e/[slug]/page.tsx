@@ -6,6 +6,7 @@ import { createPublicClient } from "@/lib/supabase/public";
 import { TicketSelector, type SelectableTicket } from "@/components/event/TicketSelector";
 import { SeatMap, type SeatData, type TierInfo } from "@/components/event/SeatMap";
 import { SalesMap, type SalesZone } from "@/components/event/SalesMap";
+import { WaitlistForm } from "@/components/event/WaitlistForm";
 
 export const dynamic = "force-dynamic";
 
@@ -230,6 +231,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           ) : (
             <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} />
           )}
+          <WaitlistForm eventId={event.id} />
         </aside>
       </div>
     </main>
