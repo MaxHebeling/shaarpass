@@ -226,7 +226,7 @@ export async function sendCampaign(eventId: string, subject: string, body: strin
   return { ok: true, sent: res.sent, total: emails.length, reason: res.reason };
 }
 
-export async function setQueueConfig(form: { eventId: string; enabled: boolean; onsaleAt: string | null; waveSize: number; maxPerBuyer: number | null }) {
+export async function setQueueConfig(form: { eventId: string; enabled: boolean; onsaleAt: string | null; waveSize: number; maxPerBuyer: number | null; safetix: boolean }) {
   const db = await createClient();
   const { error } = await db.from("events").update({
     queue_enabled: form.enabled,
@@ -234,6 +234,7 @@ export async function setQueueConfig(form: { eventId: string; enabled: boolean; 
     queue_wave_size: Math.max(1, Math.round(form.waveSize)),
     queue_drawn: false, // re-sortea en el próximo onsale
     max_tickets_per_buyer: form.maxPerBuyer && form.maxPerBuyer > 0 ? Math.round(form.maxPerBuyer) : null,
+    safetix_enabled: form.safetix,
   }).eq("id", form.eventId);
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/eventos/${form.eventId}`);

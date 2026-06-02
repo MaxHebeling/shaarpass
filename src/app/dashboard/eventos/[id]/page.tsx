@@ -19,9 +19,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer")
+    .select("id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled")
     .eq("id", id)
-    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null }>();
+    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -131,7 +131,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
       {/* Cola virtual (alta demanda) */}
       <div className="mb-6">
-        <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} maxPerBuyer={event.max_tickets_per_buyer} />
+        <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} maxPerBuyer={event.max_tickets_per_buyer} safetix={event.safetix_enabled} />
       </div>
 
       {/* Email a compradores + lista de espera */}

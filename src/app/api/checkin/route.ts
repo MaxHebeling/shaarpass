@@ -17,18 +17,33 @@ export async function POST(req: Request) {
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ result: "invalid" as Result, message: "No autenticado" }, { status: 401 });
 
+  // Código rotativo (SafeTix): payload = bearer.otp.counter → validar TOTP fresco.
+  let bearer = token;
+  if (token.includes(".")) {
+    const [b, otp, counterStr] = token.split(".");
+    bearer = b;
+    const { data: valid } = await db.rpc("verify_rotating_code", { p_token: b, p_otp: otp, p_counter: Number(counterStr) });
+    if (!valid) {
+      return NextResponse.json({ result: "invalid" as Result, message: "Código expirado o inválido (rota cada 15s)" });
+    }
+  }
+
   // RLS: si no es miembro del org, no verá el boleto.
   const { data: ticket } = await db
     .from("tickets")
-    .select("id, status, events(title), ticket_types(name), attendees(first_name, last_name)")
-    .eq("qr_token", token)
+    .select("id, status, events(title, safetix_enabled), ticket_types(name), attendees(first_name, last_name)")
+    .eq("qr_token", bearer)
     .maybeSingle();
 
   if (!ticket) {
     return NextResponse.json({ result: "invalid" as Result, message: "Boleto no encontrado o sin permiso" });
   }
 
-  const ev = ticket.events as unknown as { title: string } | null;
+  const ev = ticket.events as unknown as { title: string; safetix_enabled: boolean } | null;
+  // Evento con SafeTix: exige el código rotativo (rechaza QR estático/screenshot).
+  if (ev?.safetix_enabled && !token.includes(".")) {
+    return NextResponse.json({ result: "invalid" as Result, message: "Este evento usa boleto seguro: abre tu boleto en la app (QR rotativo)" });
+  }
   const tt = ticket.ticket_types as unknown as { name: string } | null;
   const at = ticket.attendees as unknown as { first_name: string | null; last_name: string | null } | null;
   const who = [at?.first_name, at?.last_name].filter(Boolean).join(" ") || null;
@@ -45,7 +60,7 @@ export async function POST(req: Request) {
   const { data: updated } = await db
     .from("tickets")
     .update({ status: "checked_in", checked_in_at: new Date().toISOString(), checked_in_by: user.id })
-    .eq("qr_token", token)
+    .eq("qr_token", bearer)
     .eq("status", "valid")
     .select("id")
     .maybeSingle();

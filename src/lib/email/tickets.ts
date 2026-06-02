@@ -13,6 +13,7 @@ export interface SendTicketsParams {
   currency: string;
   totalCents: number;
   tickets: EmailTicket[];
+  safetix?: boolean;
 }
 
 /** Envía los boletos con QR por email (Resend). No-op si no hay key configurada. */
@@ -26,8 +27,15 @@ export async function sendTicketEmail(p: SendTicketsParams): Promise<{ sent: boo
   const resend = new Resend(key);
 
   const ticketsHtml = p.tickets
-    .map(
-      (t) => `
+    .map((t) =>
+      p.safetix
+        ? `
+      <div style="border:1px solid #26263a;border-radius:16px;padding:20px;margin:12px 0;background:#14141f;text-align:center">
+        <div style="color:#9a9ab0;font-size:13px;text-transform:uppercase;letter-spacing:.05em">${t.typeName}</div>
+        <a href="${base}/t/${t.qr_token}" style="display:inline-block;margin-top:12px;background:linear-gradient(110deg,#a855f7,#d6219b,#f5c451);color:#08080c;font-weight:700;text-decoration:none;padding:12px 20px;border-radius:12px">Ver mi boleto seguro</a>
+        <div style="color:#6b6b80;font-size:11px;margin-top:10px">🔒 QR rotativo · ábrelo en la entrada</div>
+      </div>`
+        : `
       <div style="border:1px solid #26263a;border-radius:16px;padding:20px;margin:12px 0;background:#14141f;text-align:center">
         <div style="color:#9a9ab0;font-size:13px;text-transform:uppercase;letter-spacing:.05em">${t.typeName}</div>
         <img src="${base}/api/qr?token=${t.qr_token}" alt="QR" width="180" height="180" style="margin:12px auto;border-radius:12px;background:#fff;padding:8px" />
