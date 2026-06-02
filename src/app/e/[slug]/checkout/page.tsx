@@ -283,6 +283,11 @@ function PayForm({ slug, total }: { slug: string; total: string }) {
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
         Pagar {total}
       </button>
+      <p className="text-center text-[11px] text-muted">
+        Al pagar aceptas los <a href="/terminos" target="_blank" className="underline">Términos</a> y la{" "}
+        <a href="/privacidad" target="_blank" className="underline">Privacidad</a>. Reembolsos según la{" "}
+        <a href="/reembolsos" target="_blank" className="underline">política del evento</a>.
+      </p>
     </form>
   );
 }

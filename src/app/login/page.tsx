@@ -65,6 +65,13 @@ function LoginInner() {
             {loading && <Loader2 className="h-4 w-4 animate-spin" />}
             {mode === "in" ? "Entrar" : "Crear cuenta"}
           </button>
+          {mode === "up" && (
+            <p className="text-center text-[11px] leading-relaxed text-muted">
+              Al crear tu cuenta aceptas los{" "}
+              <a href="/terminos" target="_blank" className="text-fg underline">Términos</a> y la{" "}
+              <a href="/privacidad" target="_blank" className="text-fg underline">Política de Privacidad</a>.
+            </p>
+          )}
         </form>
 
         <button

@@ -90,6 +90,10 @@ function PayForm({ slug }: { slug: string }) {
       <button disabled={!stripe || loading} className="brand-gradient flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-semibold text-ink disabled:opacity-50">
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />} Pagar
       </button>
+      <p className="text-center text-[11px] text-muted">
+        Al pagar aceptas los <a href="/terminos" target="_blank" className="underline">Términos</a> y la{" "}
+        <a href="/privacidad" target="_blank" className="underline">Privacidad</a>.
+      </p>
     </form>
   );
 }
