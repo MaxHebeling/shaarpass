@@ -6,11 +6,15 @@ import Link from "next/link";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { ArrowLeft, Loader2, ShieldCheck, Lock } from "lucide-react";
 import { getStripePromise } from "@/lib/stripe/browser";
+import { createClient } from "@/lib/supabase/browser";
 import { money } from "@/lib/money";
 import { ourFeeCents } from "@/lib/ticketing/feeMath";
 
 interface CartItem { ticketTypeId: string; name: string; price_cents: number; quantity: number; seatIds?: string[]; eventSeatIds?: string[]; seatLabels?: string[]; }
 interface Cart { eventId: string; eventSlug: string; currency: string; items: CartItem[]; }
+interface Service { id: string; name: string; kind: string; price_cents: number; max_per_order: number; }
+
+const KIND_EMOJI: Record<string, string> = { food: "🍔", drink: "🥤", parking: "🅿️", merch: "👕", vip: "⭐", access: "🎟️", extra: "✨" };
 
 export default function CheckoutPage() {
   const { slug } = useParams<{ slug: string }>();
@@ -25,21 +29,33 @@ export default function CheckoutPage() {
   const [promo, setPromo] = useState<{ code: string; discount: number } | null>(null);
   const [promoMsg, setPromoMsg] = useState<string | null>(null);
   const [promoLoading, setPromoLoading] = useState(false);
+  // Servicios/extras
+  const [services, setServices] = useState<Service[]>([]);
+  const [svcQty, setSvcQty] = useState<Record<string, number>>({});
 
   useEffect(() => {
     const raw = sessionStorage.getItem(`cart:${slug}`);
     if (raw) setCart(JSON.parse(raw));
   }, [slug]);
 
+  useEffect(() => {
+    if (!cart) return;
+    createClient()
+      .from("services").select("id, name, kind, price_cents, max_per_order")
+      .eq("event_id", cart.eventId).eq("active", true)
+      .then(({ data }) => setServices(data ?? []));
+  }, [cart]);
+
   const totals = useMemo(() => {
-    if (!cart) return { count: 0, gross: 0, discount: 0, subtotal: 0, fee: 0, total: 0 };
+    if (!cart) return { count: 0, gross: 0, discount: 0, subtotal: 0, fee: 0, servicesTotal: 0, total: 0 };
     const count = cart.items.reduce((s, i) => s + i.quantity, 0);
     const gross = cart.items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
     const discount = Math.min(promo?.discount ?? 0, gross);
     const subtotal = Math.max(0, gross - discount);
     const fee = ourFeeCents(subtotal, count);
-    return { count, gross, discount, subtotal, fee, total: subtotal + fee };
-  }, [cart, promo]);
+    const servicesTotal = services.reduce((s, sv) => s + sv.price_cents * (svcQty[sv.id] ?? 0), 0);
+    return { count, gross, discount, subtotal, fee, servicesTotal, total: subtotal + fee + servicesTotal };
+  }, [cart, promo, services, svcQty]);
 
   async function applyPromo() {
     if (!cart || !promoInput.trim()) return;
@@ -82,6 +98,7 @@ export default function CheckoutPage() {
           idempotencyKey: crypto.randomUUID(),
           promoCode: promo?.code,
           items: cart.items.map((i) => ({ ticketTypeId: i.ticketTypeId, quantity: i.quantity, seatIds: i.seatIds, eventSeatIds: i.eventSeatIds })),
+          services: services.filter((s) => (svcQty[s.id] ?? 0) > 0).map((s) => ({ serviceId: s.id, quantity: svcQty[s.id] })),
         }),
       });
       const data = await res.json();
@@ -137,10 +154,37 @@ export default function CheckoutPage() {
             <span>Comisión de servicio <span className="text-[11px]">(2% + $0.50/boleto)</span></span>
             <span>{money(totals.fee, cart.currency)}</span>
           </div>
+          {totals.servicesTotal > 0 && (
+            <div className="flex justify-between text-muted"><span>Extras</span><span>{money(totals.servicesTotal, cart.currency)}</span></div>
+          )}
           <div className="flex justify-between font-display text-lg font-bold">
             <span>Total</span><span className="text-gold">{money(totals.total, cart.currency)}</span>
           </div>
         </div>
+
+        {/* Extras / servicios */}
+        {!clientSecret && services.length > 0 && (
+          <div className="mt-4 border-t border-line pt-4">
+            <div className="mb-2 text-sm font-medium">Agrega extras</div>
+            <div className="space-y-2">
+              {services.map((s) => {
+                const n = svcQty[s.id] ?? 0;
+                return (
+                  <div key={s.id} className="flex items-center justify-between rounded-xl border border-line bg-surface/40 px-3 py-2 text-sm">
+                    <span>{KIND_EMOJI[s.kind] ?? "✨"} {s.name} <span className="text-gold">{money(s.price_cents, cart.currency)}</span></span>
+                    <div className="flex items-center gap-2">
+                      <button type="button" onClick={() => setSvcQty((q) => ({ ...q, [s.id]: Math.max(0, n - 1) }))} disabled={n === 0}
+                        className="grid h-7 w-7 place-items-center rounded-full border border-line disabled:opacity-30">−</button>
+                      <span className="w-5 text-center tabular-nums">{n}</span>
+                      <button type="button" onClick={() => setSvcQty((q) => ({ ...q, [s.id]: Math.min(s.max_per_order, n + 1) }))} disabled={n >= s.max_per_order}
+                        className="brand-gradient grid h-7 w-7 place-items-center rounded-full text-ink disabled:opacity-30">+</button>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
 
         {/* Promo code */}
         {!clientSecret && (

@@ -21,6 +21,7 @@ const Body = z.object({
       eventSeatIds: z.array(z.string().uuid()).optional(),  // modelo nuevo (event_seats)
     }))
     .min(1),
+  services: z.array(z.object({ serviceId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).optional(),
 });
 
 export async function POST(req: Request) {
@@ -28,7 +29,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "payload inválido" }, { status: 400 });
   }
-  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items } = parsed.data;
+  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services } = parsed.data;
   const db = createAdminClient();
 
   // Idempotencia: si ya existe una orden con esta key, devuélvela tal cual.
@@ -103,6 +104,33 @@ export async function POST(req: Request) {
   const subtotalCents = Math.max(0, grossCents - discountCents);
   const fees = computeFees(subtotalCents, ticketCount);
 
+  // Servicios/extras (validación de disponibilidad + total). Sin comisión de plataforma.
+  let servicesTotal = 0;
+  let svcRows: { service_id: string; quantity: number; unit_price_cents: number }[] = [];
+  if (services?.length) {
+    const svcIds = services.map((s) => s.serviceId);
+    const { data: svc } = await db
+      .from("services")
+      .select("id, price_cents, inventory, sold, max_per_order, active, event_id")
+      .in("id", svcIds);
+    const byId = new Map((svc ?? []).map((s) => [s.id, s]));
+    for (const s of services) {
+      const def = byId.get(s.serviceId);
+      if (!def || def.event_id !== eventId || !def.active) {
+        return NextResponse.json({ error: "servicio inválido" }, { status: 400 });
+      }
+      if (s.quantity > def.max_per_order) {
+        return NextResponse.json({ error: `máximo ${def.max_per_order} por orden` }, { status: 409 });
+      }
+      if (def.inventory != null && def.sold + s.quantity > def.inventory) {
+        return NextResponse.json({ error: "servicio agotado" }, { status: 409 });
+      }
+      servicesTotal += def.price_cents * s.quantity;
+      svcRows.push({ service_id: s.serviceId, quantity: s.quantity, unit_price_cents: def.price_cents });
+    }
+  }
+  const orderTotal = fees.totalCents + servicesTotal;
+
   // 3) Crea la orden (pending) + items.
   const { data: order, error: orderErr } = await db
     .from("orders")
@@ -115,7 +143,7 @@ export async function POST(req: Request) {
       discount_cents: discountCents,
       promo_code_id: promoId,
       platform_fee_cents: fees.platformFeeCents,
-      total_cents: fees.totalCents,
+      total_cents: orderTotal,
       currency: event.currency,
       idempotency_key: idempotencyKey,
     })
@@ -143,12 +171,15 @@ export async function POST(req: Request) {
   if (allEventSeatIds.length) {
     await db.from("event_seats").update({ order_id: order.id }).in("id", allEventSeatIds);
   }
+  if (svcRows.length) {
+    await db.from("order_services").insert(svcRows.map((s) => ({ order_id: order.id, ...s })));
+  }
 
   // 4) PaymentIntent con destination charge: el neto va al organizador,
   //    application_fee_amount = nuestra comisión transparente.
   const intent = await getStripe().paymentIntents.create(
     {
-      amount: fees.totalCents,
+      amount: orderTotal,
       currency: event.currency,
       application_fee_amount: fees.platformFeeCents,
       transfer_data: { destination: org.stripe_account_id },

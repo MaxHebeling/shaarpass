@@ -1,0 +1,6 @@
+-- Fase 4 — Servicios/extras en confirm/refund.
+-- confirm_order_paid: + bloque que incrementa services.sold de cada order_service
+--   (guardado: where inventory is null or sold+qty <= inventory; no falla la orden).
+-- refund_order: + bloque que devuelve services.sold (greatest(0, sold-qty)).
+-- Recrea ambas funciones (versión canónica con GA + seats viejo + event_seats + servicios).
+-- Cuerpo completo aplicado en el proyecto Supabase (migración 0019).

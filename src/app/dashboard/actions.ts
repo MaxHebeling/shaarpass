@@ -183,6 +183,32 @@ export async function setZonePrice(eventId: string, zoneId: string, priceCents: 
   return { ok: true };
 }
 
+export async function createService(form: {
+  eventId: string; currency: string; name: string; kind: string; price: number; inventory: number | null; maxPerOrder: number;
+}) {
+  const db = await createClient();
+  if (!form.name.trim()) return { error: "Nombre requerido" };
+  const { error } = await db.from("services").insert({
+    event_id: form.eventId,
+    name: form.name.trim(),
+    kind: form.kind,
+    price_cents: Math.round(form.price * 100),
+    currency: form.currency.toLowerCase(),
+    inventory: form.inventory,
+    max_per_order: form.maxPerOrder || 10,
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function deleteService(serviceId: string, eventId: string) {
+  const db = await createClient();
+  await db.from("services").delete().eq("id", serviceId);
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true };
+}
+
 export async function signOut() {
   const db = await createClient();
   await db.auth.signOut();
