@@ -1,0 +1,12 @@
+{
+  "name": "ShaarPass",
+  "short_name": "ShaarPass",
+  "description": "Vende boletos y haz check-in con la comisión más baja.",
+  "start_url": "/dashboard/checkin",
+  "display": "standalone",
+  "background_color": "#08080c",
+  "theme_color": "#08080c",
+  "icons": [
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any" }
+  ]
+}

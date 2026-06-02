@@ -1,0 +1,190 @@
+"use server";
+
+import { redirect } from "next/navigation";
+import { revalidatePath } from "next/cache";
+import { createClient } from "@/lib/supabase/server";
+
+function slugify(s: string) {
+  return s
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[̀-ͯ]/g, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 50);
+}
+
+export interface TicketTypeInput {
+  name: string;
+  price: number; // en unidades de moneda (no centavos)
+  quantity: number;
+}
+
+export async function createEvent(form: {
+  title: string;
+  description: string;
+  category: string;
+  city: string;
+  region: string;
+  venueName: string;
+  startsAt: string;
+  endsAt: string;
+  timezone: string;
+  currency: string;
+  orgName: string;
+  publish: boolean;
+  tickets: TicketTypeInput[];
+}) {
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return { error: "No autenticado" };
+
+  // 1) Org del usuario (o crear una la primera vez).
+  let orgId: string | null = null;
+  const { data: membership } = await db
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user.id)
+    .limit(1)
+    .maybeSingle();
+
+  if (membership) {
+    orgId = membership.org_id;
+  } else {
+    const orgName = form.orgName?.trim() || "Mi organización";
+    const { data: newOrg, error: orgErr } = await db.rpc("create_organization", {
+      p_name: orgName,
+      p_slug: `${slugify(orgName)}-${crypto.randomUUID().slice(0, 6)}`,
+    });
+    if (orgErr) return { error: `No se pudo crear la organización: ${orgErr.message}` };
+    orgId = newOrg as string;
+  }
+
+  // 2) Venue (opcional)
+  let venueId: string | null = null;
+  if (form.venueName?.trim()) {
+    const { data: venue } = await db
+      .from("venues")
+      .insert({ org_id: orgId, name: form.venueName.trim(), city: form.city || null })
+      .select("id")
+      .single();
+    venueId = venue?.id ?? null;
+  }
+
+  // 3) Evento
+  const slug = `${slugify(form.title)}-${crypto.randomUUID().slice(0, 6)}`;
+  const { data: event, error: evErr } = await db
+    .from("events")
+    .insert({
+      org_id: orgId,
+      venue_id: venueId,
+      slug,
+      title: form.title,
+      description: form.description || null,
+      category: form.category || null,
+      city: form.city || null,
+      region: form.region || null,
+      status: form.publish ? "published" : "draft",
+      starts_at: form.startsAt,
+      ends_at: form.endsAt,
+      timezone: form.timezone || "America/Tijuana",
+      currency: form.currency.toLowerCase(),
+      published_at: form.publish ? new Date().toISOString() : null,
+    })
+    .select("id, slug")
+    .single();
+  if (evErr || !event) return { error: `No se pudo crear el evento: ${evErr?.message}` };
+
+  // 4) Tipos de boleto
+  const rows = form.tickets
+    .filter((t) => t.name.trim() && t.quantity > 0)
+    .map((t) => ({
+      event_id: event.id,
+      name: t.name.trim(),
+      price_cents: Math.round(t.price * 100),
+      currency: form.currency.toLowerCase(),
+      quantity_total: Math.round(t.quantity),
+    }));
+  if (rows.length) {
+    const { error: ttErr } = await db.from("ticket_types").insert(rows);
+    if (ttErr) return { error: `Evento creado pero falló crear boletos: ${ttErr.message}` };
+  }
+
+  revalidatePath("/dashboard");
+  redirect(`/dashboard?created=${event.slug}`);
+}
+
+export async function createPromo(form: {
+  eventId: string;
+  code: string;
+  discountType: "percent" | "fixed";
+  value: number; // % si percent; unidades de moneda si fixed
+  maxRedemptions: number | null;
+  expiresAt: string | null;
+}) {
+  const db = await createClient();
+  const discount_value = form.discountType === "fixed" ? Math.round(form.value * 100) : Math.round(form.value);
+  if (discount_value <= 0) return { error: "El descuento debe ser mayor a 0" };
+  if (form.discountType === "percent" && discount_value > 100) return { error: "El porcentaje no puede pasar de 100" };
+
+  const { error } = await db.from("promo_codes").insert({
+    event_id: form.eventId,
+    code: form.code.trim().toUpperCase(),
+    discount_type: form.discountType,
+    discount_value,
+    max_redemptions: form.maxRedemptions,
+    expires_at: form.expiresAt ? new Date(form.expiresAt).toISOString() : null,
+  });
+  if (error) return { error: error.message.includes("duplicate") ? "Ese código ya existe en el evento" : error.message };
+
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function generateSeats(form: {
+  ticketTypeId: string;
+  eventId: string;
+  section: string;
+  rows: number;
+  cols: number;
+}) {
+  const db = await createClient();
+  const { error } = await db.rpc("generate_seats", {
+    p_ticket_type: form.ticketTypeId,
+    p_section: form.section.trim() || "General",
+    p_rows: Math.round(form.rows),
+    p_cols: Math.round(form.cols),
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function deletePromo(promoId: string, eventId: string) {
+  const db = await createClient();
+  await db.from("promo_codes").delete().eq("id", promoId);
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function attachVenueMap(eventId: string, mapId: string) {
+  const db = await createClient();
+  const { error } = await db.rpc("attach_map_to_event", { p_event: eventId, p_map: mapId });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function setZonePrice(eventId: string, zoneId: string, priceCents: number) {
+  const db = await createClient();
+  const { error } = await db.rpc("set_zone_price", { p_event: eventId, p_zone: zoneId, p_price: Math.round(priceCents) });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true };
+}
+
+export async function signOut() {
+  const db = await createClient();
+  await db.auth.signOut();
+  redirect("/login");
+}

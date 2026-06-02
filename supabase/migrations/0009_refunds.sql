@@ -1,0 +1,6 @@
+-- Reembolso de orden + cancelación de evento (lógica atómica, authz interna).
+-- refund_order: devuelve inventario, anula boletos, descuenta canje de promo,
+--   marca 'refunded'. Idempotente. Solo owner/admin del org.
+-- cancel_event: marca evento 'cancelled' y reembolsa todas las órdenes pagadas.
+-- Ver cuerpo completo aplicado en el proyecto Supabase (migración 0009).
+-- Grants: authenticated + service_role (revocado de anon).

@@ -1,0 +1,7 @@
+-- Fase 3 — Venta con mapa de recinto (nuevo modelo event_seats).
+-- attach_map_to_event: crea tier+precio por zona y genera event_seats desde venue_seats.
+-- set_zone_price: precio por zona (sincroniza el ticket_type).
+-- confirm_order_paid / refund_order: AÑADEN manejo de event_seats (held→sold / liberar),
+--   1 boleto por asiento con seat_id, quantity_sold por zona. Conservan GA + seats viejo.
+-- Cuerpo completo aplicado en el proyecto Supabase (migración 0018). Authz interna por org.
+-- RPCs nuevas: attach_map_to_event(uuid,uuid), set_zone_price(uuid,uuid,int) → authenticated.

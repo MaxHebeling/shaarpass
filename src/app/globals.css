@@ -1,0 +1,93 @@
+@import "tailwindcss";
+
+/* ============================================================
+   ShaarPass — Sistema de diseño "Dark Luxury"
+   Negro profundo · gradiente violeta→fucsia · oro para dinero
+   ============================================================ */
+@theme {
+  --color-ink: #08080c;
+  --color-ink-2: #0e0e15;
+  --color-surface: #14141f;
+  --color-surface-2: #1c1c2b;
+  --color-line: #26263a;
+
+  --color-violet: #7c3aed;
+  --color-fuchsia: #d6219b;
+  --color-gold: #f5c451;
+  --color-gold-soft: #fde68a;
+
+  --color-fg: #f4f4f7;
+  --color-muted: #9a9ab0;
+
+  --font-display: var(--font-display), system-ui, sans-serif;
+  --font-sans: var(--font-sans), system-ui, sans-serif;
+
+  --radius-xl2: 1.5rem;
+}
+
+html {
+  scroll-behavior: smooth;
+}
+
+body {
+  background: var(--color-ink);
+  color: var(--color-fg);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  overflow-x: hidden;
+}
+
+/* Gradiente de marca reutilizable */
+.brand-gradient {
+  background-image: linear-gradient(110deg, #a855f7 0%, #d6219b 45%, #f5c451 110%);
+}
+.brand-text {
+  background-image: linear-gradient(110deg, #c084fc 0%, #f472b6 55%, #f5c451 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+/* Aurora de fondo */
+.aurora::before {
+  content: "";
+  position: absolute;
+  inset: -20% -10% auto -10%;
+  height: 70vh;
+  background:
+    radial-gradient(60% 60% at 20% 20%, rgba(168, 85, 247, 0.35), transparent 70%),
+    radial-gradient(50% 50% at 80% 10%, rgba(214, 33, 155, 0.28), transparent 70%),
+    radial-gradient(40% 40% at 60% 60%, rgba(245, 196, 81, 0.12), transparent 70%);
+  filter: blur(40px);
+  pointer-events: none;
+  z-index: 0;
+}
+
+/* Tarjeta glass */
+.glass {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(14px);
+}
+
+/* Grano sutil para look premium */
+.grain::after {
+  content: "";
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.035;
+  z-index: 1;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='3'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+}
+
+@keyframes float-slow {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-12px); }
+}
+.animate-float-slow { animation: float-slow 6s ease-in-out infinite; }
+
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
