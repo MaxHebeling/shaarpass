@@ -35,8 +35,9 @@ function LoginInner() {
   return (
     <main className="aurora relative grid min-h-screen place-items-center px-6">
       <div className="glass relative z-10 w-full max-w-sm rounded-3xl p-8">
-        <div className="mb-6 flex justify-center">
-          <img src="/logo-full.png" alt="ShaarPass" className="h-24 w-auto" />
+        <div className="mb-6 flex flex-col items-center gap-3">
+          <img src="/logo-mark.png" alt="ShaarPass" className="h-20 w-20 rounded-2xl shadow-lg shadow-fuchsia/20" />
+          <span className="font-display text-2xl font-bold tracking-tight">ShaarPass</span>
         </div>
         <h1 className="font-display text-2xl font-bold">
           {mode === "in" ? "Bienvenido de vuelta" : "Crea tu cuenta"}
