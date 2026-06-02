@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import { motion } from "motion/react";
 import { ArrowRight, Sparkles, Zap, ShieldCheck } from "lucide-react";
 
@@ -14,7 +15,12 @@ const fadeUp = {
 
 export function Hero() {
   return (
-    <section className="aurora relative overflow-hidden px-6 pb-24 pt-40 md:pt-48">
+    <section className="relative overflow-hidden px-6 pb-24 pt-40 md:pt-48">
+      {/* Imagen de fondo full-bleed */}
+      <Image src="/hero.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
+      <div className="absolute inset-0 bg-gradient-to-b from-ink/60 via-ink/80 to-ink" />
+      <div className="absolute inset-0 bg-ink/30" />
+
       <div className="relative z-10 mx-auto max-w-4xl text-center">
         <motion.div
           variants={fadeUp}
