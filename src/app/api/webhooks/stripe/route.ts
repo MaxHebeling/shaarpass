@@ -42,6 +42,24 @@ export async function POST(req: Request) {
         break;
       }
 
+      // Abono / temporada: emite un boleto por cada evento del abono.
+      if (pi.metadata?.kind === "season" && pi.metadata?.order_id) {
+        const sOrderId = pi.metadata.order_id;
+        const { error } = await db.rpc("confirm_season_pass", { p_order: sOrderId });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        try {
+          const { sendBulkEmail } = await import("@/lib/email/campaigns");
+          const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
+          const { data: o } = await db.from("orders").select("buyer_email, manage_token, seasons(title)").eq("id", sOrderId).maybeSingle();
+          const title = (o?.seasons as unknown as { title: string } | null)?.title ?? "tu abono";
+          if (o?.manage_token) {
+            await sendBulkEmail([o.buyer_email], `Tu abono está listo: ${title} (ShaarPass)`,
+              `Gestiona todos los boletos de tu abono aquí: ${base}/abono/${o.manage_token}`);
+          }
+        } catch { /* best-effort */ }
+        break;
+      }
+
       const orderId = pi.metadata?.order_id;
       if (orderId) {
         // confirm_order_paid es idempotente: webhook duplicado = no-op.
@@ -101,7 +119,11 @@ export async function POST(req: Request) {
       const orderId = pi.metadata?.order_id;
       if (orderId) {
         await db.from("orders").update({ status: "failed" }).eq("id", orderId).eq("status", "pending");
-        // Los holds expiran solos vía pg_cron; no tocamos quantity_sold.
+        // Abono: el cupo se reservó al crear la orden → liberarlo.
+        if (pi.metadata?.kind === "season" && pi.metadata?.season_id) {
+          await db.rpc("release_season_pass", { p_season: pi.metadata.season_id });
+        }
+        // Eventos: los holds expiran solos vía pg_cron; no tocamos quantity_sold.
       }
       break;
     }

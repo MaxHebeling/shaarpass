@@ -1,0 +1,13 @@
+-- TM-7 RPCs (SECURITY DEFINER, search_path public,extensions; solo service_role).
+--
+-- reserve_season_pass(p_season) -> boolean: reserva atómica de 1 abono + 1 cupo
+--   en el ticket_type de CADA evento. Dos pasadas (verificar todo con FOR UPDATE,
+--   luego incrementar todo) en una sola transacción → sin sobreventa ni cupos
+--   parciales. Devuelve false si el abono o cualquier evento está agotado.
+-- release_season_pass(p_season) -> void: decrementa abono + cada ticket_type
+--   (pago fallido/cancelado).
+-- confirm_season_pass(p_order) -> void: idempotente; emite un ticket por evento
+--   del abono (qr_token aleatorio, totp_secret default) y marca la orden 'paid'.
+--
+-- revoke a public/anon/authenticated; grant execute solo a service_role.
+-- Cuerpo completo aplicado en el proyecto Supabase (migración 0029).

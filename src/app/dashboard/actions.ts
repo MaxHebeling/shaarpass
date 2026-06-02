@@ -269,6 +269,68 @@ export async function runPresaleLottery(eventId: string, count: number) {
   return { ok: true, selected: n as number };
 }
 
+// ─── Abonos / temporada (TM-7) ───────────────────────────────────────────────
+
+async function currentOrgId(db: Awaited<ReturnType<typeof createClient>>): Promise<string | null> {
+  const { data: { user } } = await db.auth.getUser();
+  if (!user) return null;
+  const { data: m } = await db.from("org_members").select("org_id").eq("user_id", user.id).limit(1).maybeSingle();
+  return m?.org_id ?? null;
+}
+
+export async function createSeason(form: { title: string; description: string; currency: string; price: number; quantity: number }) {
+  const db = await createClient();
+  const orgId = await currentOrgId(db);
+  if (!orgId) return { error: "Crea primero un evento (necesitas una organización)" };
+  if (!form.title.trim()) return { error: "Título requerido" };
+
+  const slug = `${slugify(form.title)}-${crypto.randomUUID().slice(0, 6)}`;
+  const { data, error } = await db.from("seasons").insert({
+    org_id: orgId,
+    slug,
+    title: form.title.trim(),
+    description: form.description?.trim() || null,
+    currency: form.currency.toLowerCase(),
+    price_cents: Math.round(form.price * 100),
+    quantity_total: Math.max(0, Math.round(form.quantity)),
+  }).select("id").single();
+  if (error || !data) return { error: error?.message ?? "No se pudo crear el abono" };
+  revalidatePath("/dashboard/abonos");
+  redirect(`/dashboard/abonos/${data.id}`);
+}
+
+export async function addSeasonEvent(form: { seasonId: string; eventId: string; ticketTypeId: string }) {
+  const db = await createClient();
+  const { error } = await db.from("season_events").insert({
+    season_id: form.seasonId,
+    event_id: form.eventId,
+    ticket_type_id: form.ticketTypeId,
+  });
+  if (error) return { error: error.message.includes("duplicate") ? "Ese evento ya está en el abono" : error.message };
+  revalidatePath(`/dashboard/abonos/${form.seasonId}`);
+  return { ok: true };
+}
+
+export async function removeSeasonEvent(seasonId: string, eventId: string) {
+  const db = await createClient();
+  await db.from("season_events").delete().eq("season_id", seasonId).eq("event_id", eventId);
+  revalidatePath(`/dashboard/abonos/${seasonId}`);
+  return { ok: true };
+}
+
+export async function publishSeason(seasonId: string, publish: boolean) {
+  const db = await createClient();
+  // No publicar un abono vacío.
+  if (publish) {
+    const { count } = await db.from("season_events").select("event_id", { count: "exact", head: true }).eq("season_id", seasonId);
+    if (!count) return { error: "Agrega al menos un evento antes de publicar" };
+  }
+  const { error } = await db.from("seasons").update({ status: publish ? "published" : "draft" }).eq("id", seasonId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/abonos/${seasonId}`);
+  return { ok: true };
+}
+
 export async function signOut() {
   const db = await createClient();
   await db.auth.signOut();

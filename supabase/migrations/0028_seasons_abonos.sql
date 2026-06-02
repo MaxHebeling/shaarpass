@@ -1,0 +1,15 @@
+-- TM-7: abonos / temporada (season passes) + Account Manager.
+-- Un abono (seasons) agrupa varios eventos (season_events, cada uno con el
+-- ticket_type que el abono otorga). Al comprarlo se emite UN boleto por evento
+-- para el comprador, reutilizando QR rotativo / transferencia / reventa.
+--
+-- seasons(id, org_id, slug, title, description, currency, price_cents,
+--         quantity_total, quantity_sold, status[draft|published], created_at)
+-- season_events(season_id, event_id, ticket_type_id, sort_order) PK(season_id,event_id)
+--
+-- orders: event_id pasa a NULLABLE; se añade season_id (fk) + manage_token (bearer
+--   del Account Manager) + CHECK (event_id is not null OR season_id is not null).
+--
+-- RLS: seasons/season_events lectura pública si published (o miembro de la org);
+--   escritura solo miembros de la org. orders RLS usa org_id (no event_id) → intacta.
+-- Cuerpo completo aplicado en el proyecto Supabase (migración 0028).
