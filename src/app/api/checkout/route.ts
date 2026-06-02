@@ -4,6 +4,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
 import { validatePromo } from "@/lib/ticketing/promo";
+import { isEdgeQueue, edgeAdmitted } from "@/lib/queue/edge";
 
 export const runtime = "nodejs";
 
@@ -52,7 +53,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, payouts_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, payouts_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -61,8 +62,10 @@ export async function POST(req: Request) {
 
   // Cola virtual: solo compradores admitidos pueden pagar.
   if (event.queue_enabled) {
-    const { data: ok } = await db.rpc("is_queue_admitted", { p_event: eventId, p_token: queueToken ?? "" });
-    if (!ok) return NextResponse.json({ error: "Tu turno en la cola expiró o no es válido. Vuelve a la fila." }, { status: 403 });
+    const admitted = isEdgeQueue()
+      ? edgeAdmitted(eventId, queueToken ?? "", event.onsale_at ?? null, event.queue_wave_size ?? 50)
+      : (await db.rpc("is_queue_admitted", { p_event: eventId, p_token: queueToken ?? "" })).data;
+    if (!admitted) return NextResponse.json({ error: "Tu turno en la cola expiró o no es válido. Vuelve a la fila." }, { status: 403 });
   }
 
   // Presale (Verified Fan): durante la ventana, exige un código válido.
@@ -205,8 +208,8 @@ export async function POST(req: Request) {
   if (svcRows.length) {
     await db.from("order_services").insert(svcRows.map((s) => ({ order_id: order.id, ...s })));
   }
-  // Consume el turno en la cola (ya entró a comprar).
-  if (event.queue_enabled && queueToken) {
+  // Consume el turno en la cola (ya entró a comprar). El edge es por tiempo puro, no marca.
+  if (event.queue_enabled && queueToken && !isEdgeQueue()) {
     await db.rpc("mark_queue_used", { p_token: queueToken });
   }
   // Consume el código de presale (un solo uso).

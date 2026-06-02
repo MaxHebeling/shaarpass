@@ -3,6 +3,7 @@ import { createHash } from "crypto";
 import { z } from "zod";
 import { createPublicClient } from "@/lib/supabase/public";
 import { verifyTurnstile } from "@/lib/turnstile";
+import { isEdgeQueue, edgeJoin } from "@/lib/queue/edge";
 
 export const runtime = "nodejs";
 
@@ -27,6 +28,14 @@ export async function POST(req: Request) {
   // Rate limit: máx 20 intentos de unirse / minuto por IP.
   const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `join:${ip}`, p_max: 20, p_window_seconds: 60 });
   if (rlOk === false) return NextResponse.json({ error: "Demasiados intentos, espera un momento" }, { status: 429 });
+
+  // Escala masiva: cola en el edge (Upstash) si está configurada.
+  if (isEdgeQueue()) {
+    const { data: ev } = await db.from("events").select("onsale_at, queue_wave_size").eq("id", parsed.data.eventId).maybeSingle();
+    const res = await edgeJoin(parsed.data.eventId, ev?.onsale_at ?? null, ev?.queue_wave_size ?? 50);
+    return NextResponse.json(res);
+  }
+
   const { data, error } = await db.rpc("join_queue", { p_event: parsed.data.eventId, p_token: token, p_identity: identity });
   if (error) return NextResponse.json({ error: error.message }, { status: 409 });
   const row = Array.isArray(data) ? data[0] : data;
