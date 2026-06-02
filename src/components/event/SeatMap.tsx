@@ -60,9 +60,9 @@ export function SeatMap({
   const chosen = Object.values(selected);
   const totals = useMemo(() => {
     const subtotal = chosen.reduce((sum, s) => sum + (tierMap.get(s.ticket_type_id)?.price_cents ?? 0), 0);
-    const fee = ourFeeCents(subtotal, chosen.length);
+    const fee = ourFeeCents(subtotal, chosen.length, currency);
     return { subtotal, fee, total: subtotal + fee };
-  }, [chosen, tierMap]);
+  }, [chosen, tierMap, currency]);
 
   function checkout() {
     setLoading(true);
@@ -149,7 +149,7 @@ export function SeatMap({
                 ))}
               </div>
               <div className="flex justify-between text-muted"><span>{chosen.length} asientos</span><span>{money(totals.subtotal, currency)}</span></div>
-              <div className="flex justify-between text-muted"><span>Comisión (2% + $0.50/boleto)</span><span>{money(totals.fee, currency)}</span></div>
+              <div className="flex justify-between text-muted"><span>Comisión (incluye procesamiento)</span><span>{money(totals.fee, currency)}</span></div>
               <div className="mt-1 flex justify-between font-display text-lg font-bold"><span>Total</span><span className="text-gold">{money(totals.total, currency)}</span></div>
             </div>
           </motion.div>

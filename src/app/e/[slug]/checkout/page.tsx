@@ -53,9 +53,10 @@ export default function CheckoutPage() {
     const gross = cart.items.reduce((s, i) => s + i.price_cents * i.quantity, 0);
     const discount = Math.min(promo?.discount ?? 0, gross);
     const subtotal = Math.max(0, gross - discount);
-    const fee = ourFeeCents(subtotal, count);
     const servicesTotal = services.reduce((s, sv) => s + sv.price_cents * (svcQty[sv.id] ?? 0), 0);
-    return { count, gross, discount, subtotal, fee, servicesTotal, total: subtotal + fee + servicesTotal };
+    // La comisión incluye el procesamiento de Stripe sobre TODO el cargo (boletos + extras).
+    const fee = ourFeeCents(subtotal, count, cart.currency, servicesTotal);
+    return { count, gross, discount, subtotal, fee, servicesTotal, total: subtotal + servicesTotal + fee };
   }, [cart, promo, services, svcQty]);
 
   async function applyPromo() {
@@ -154,7 +155,7 @@ export default function CheckoutPage() {
             </div>
           )}
           <div className="flex justify-between text-muted">
-            <span>Comisión de servicio <span className="text-[11px]">(2% + $0.50/boleto)</span></span>
+            <span>Comisión de servicio <span className="text-[11px]">(incluye procesamiento de pago)</span></span>
             <span>{money(totals.fee, cart.currency)}</span>
           </div>
           {totals.servicesTotal > 0 && (

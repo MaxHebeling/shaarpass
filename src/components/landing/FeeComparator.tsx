@@ -59,7 +59,7 @@ export function FeeComparator() {
             />
 
             <div className="glass rounded-2xl p-4 text-sm text-muted">
-              Nuestra comisión: <span className="font-semibold text-fg">{OUR_PERCENT}% + {fmt(OUR_FIXED_CENTS)}</span> por boleto.
+              Nuestra comisión: <span className="font-semibold text-fg">{OUR_PERCENT}% + {fmt(OUR_FIXED_CENTS)}</span> por boleto + procesamiento de pago.
               Eventbrite: <span className="text-fg">3.7% + $1.79 + 2.9%</span>.
             </div>
           </div>

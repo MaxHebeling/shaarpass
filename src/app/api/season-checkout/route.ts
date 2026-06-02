@@ -45,7 +45,7 @@ export async function POST(req: Request) {
   if (resErr) return NextResponse.json({ error: resErr.message }, { status: 500 });
   if (!reserved) return NextResponse.json({ error: "Abono agotado o sin cupo en algún evento" }, { status: 409 });
 
-  const fees = computeFees(season.price_cents, 1);
+  const fees = computeFees(season.price_cents, 1, season.currency);
   const manageToken = crypto.randomUUID().replace(/-/g, "");
 
   const { data: order, error: orderErr } = await db

@@ -1,12 +1,50 @@
-/** Matemática de fees compartida (cliente + marketing). Pura, sin env. */
+/** Matemática de fees compartida (cliente + servidor + marketing). Pura, sin env. */
 
-export const OUR_PERCENT = 2.0;
-export const OUR_FIXED_CENTS = 50;
+export const OUR_PERCENT = 2.0;       // margen de la plataforma
+export const OUR_FIXED_CENTS = 50;    // + $0.50 por boleto
 
-/** Nuestra comisión: 2% + $0.50 por boleto. Eventos gratis = $0. */
-export function ourFeeCents(subtotalCents: number, ticketCount: number): number {
+/**
+ * Costo de procesamiento de Stripe (se traslada al comprador, como Eventbrite).
+ * Varía por país/moneda. Override por env en el servidor; aquí, defaults por moneda.
+ */
+export function processingRate(currency = "usd"): { pct: number; fixed: number } {
+  switch (currency.toLowerCase()) {
+    case "mxn": return { pct: 3.6, fixed: 300 };  // Stripe MX ≈ 3.6% + $3 MXN
+    case "usd": return { pct: 2.9, fixed: 30 };   // Stripe US ≈ 2.9% + $0.30
+    case "eur": return { pct: 2.5, fixed: 25 };
+    default:    return { pct: 2.9, fixed: 30 };
+  }
+}
+
+/** Margen NETO que quiere la plataforma. Eventos gratis = $0. */
+export function marginCents(subtotalCents: number, ticketCount: number, pct = OUR_PERCENT, fixed = OUR_FIXED_CENTS): number {
   if (subtotalCents <= 0) return 0;
-  return Math.round((subtotalCents * OUR_PERCENT) / 100) + OUR_FIXED_CENTS * ticketCount;
+  return Math.round((subtotalCents * pct) / 100) + fixed * ticketCount;
+}
+
+/**
+ * Comisión TOTAL al comprador = margen de plataforma + procesamiento de Stripe,
+ * con "gross-up": el comprador paga T tal que, después de que Stripe cobre su
+ * % sobre TODO el cargo, la plataforma netea su margen y el organizador recibe
+ * su neto íntegro (boletos + extras). Sin esto, la plataforma perdería dinero.
+ *
+ *   T = (organizerNet + margen + procFijo) / (1 − proc% )
+ *   comisión = T − organizerNet
+ */
+export function ourFeeCents(
+  subtotalCents: number,
+  ticketCount: number,
+  currency = "usd",
+  passthroughCents = 0,
+  pct = OUR_PERCENT,
+  fixed = OUR_FIXED_CENTS,
+): number {
+  const organizerNet = Math.max(0, subtotalCents) + Math.max(0, passthroughCents);
+  if (organizerNet <= 0) return 0;
+  const m = marginCents(subtotalCents, ticketCount, pct, fixed);
+  const proc = processingRate(currency);
+  const total = Math.ceil((organizerNet + m + proc.fixed) / (1 - proc.pct / 100));
+  return total - organizerNet;
 }
 
 /**

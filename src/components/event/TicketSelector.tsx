@@ -25,9 +25,9 @@ export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: strin
   const { count, subtotal, fee, total } = useMemo(() => {
     const count = Object.values(qty).reduce((a, b) => a + b, 0);
     const subtotal = tickets.reduce((s, t) => s + (qty[t.id] ?? 0) * t.price_cents, 0);
-    const fee = ourFeeCents(subtotal, count);
+    const fee = ourFeeCents(subtotal, count, currency);
     return { count, subtotal, fee, total: subtotal + fee };
-  }, [qty, tickets]);
+  }, [qty, tickets, currency]);
 
   function set(id: string, delta: number, max: number) {
     setQty((q) => {
@@ -99,7 +99,7 @@ export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: strin
           >
             <div className="mt-5 space-y-1.5 border-t border-line pt-4 text-sm">
               <Row label={`Subtotal (${count} ${count === 1 ? "boleto" : "boletos"})`} value={money(subtotal, currency)} />
-              <Row label="Comisión de servicio" value={money(fee, currency)} muted hint="2% + $0.50/boleto · transparente" />
+              <Row label="Comisión de servicio" value={money(fee, currency)} muted hint="incluye procesamiento · transparente" />
               <Row label="Total" value={money(total, currency)} big />
             </div>
           </motion.div>

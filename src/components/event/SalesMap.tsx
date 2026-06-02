@@ -81,9 +81,9 @@ export function SalesMap({
   const chosen = Object.entries(selected);
   const totals = useMemo(() => {
     const subtotal = chosen.reduce((s, [, v]) => s + v.priceCents, 0);
-    const fee = ourFeeCents(subtotal, chosen.length);
+    const fee = ourFeeCents(subtotal, chosen.length, currency);
     return { subtotal, fee, total: subtotal + fee };
-  }, [chosen]);
+  }, [chosen, currency]);
 
   // TM-5: filtro de precio (macro) + best-available (zona).
   const priceRange = useMemo(() => {

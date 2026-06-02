@@ -136,7 +136,6 @@ export async function POST(req: Request) {
   }
 
   const subtotalCents = Math.max(0, grossCents - discountCents);
-  const fees = computeFees(subtotalCents, ticketCount);
 
   // Servicios/extras (validación de disponibilidad + total). Sin comisión de plataforma.
   let servicesTotal = 0;
@@ -163,7 +162,11 @@ export async function POST(req: Request) {
       svcRows.push({ service_id: s.serviceId, quantity: s.quantity, unit_price_cents: def.price_cents });
     }
   }
-  const orderTotal = fees.totalCents + servicesTotal;
+  // El procesamiento de Stripe aplica a TODO el cargo (boletos + extras): los
+  // extras van como passthrough (al organizador, sin margen, pero con su parte
+  // de procesamiento cubierta por el gross-up).
+  const fees = computeFees(subtotalCents, ticketCount, event.currency, servicesTotal);
+  const orderTotal = fees.totalCents;
 
   // 3) Crea la orden (pending) + items.
   const { data: order, error: orderErr } = await db
