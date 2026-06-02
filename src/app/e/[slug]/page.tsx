@@ -8,6 +8,7 @@ import { SeatMap, type SeatData, type TierInfo } from "@/components/event/SeatMa
 import { SalesMap, type SalesZone } from "@/components/event/SalesMap";
 import { WaitlistForm } from "@/components/event/WaitlistForm";
 import { QueueGate } from "@/components/event/QueueGate";
+import { PresaleRegister } from "@/components/event/PresaleRegister";
 
 export const dynamic = "force-dynamic";
 
@@ -48,6 +49,7 @@ interface EventRow {
   region: string | null;
   queue_enabled: boolean;
   onsale_at: string | null;
+  presale_enabled: boolean;
   organizations: { name: string } | null;
   venues: { name: string; address: string | null; city: string | null } | null;
 }
@@ -67,7 +69,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const { data: event } = await db
     .from("events")
-    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, organizations(name), venues(name, address, city)")
+    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, presale_enabled, organizations(name), venues(name, address, city)")
     .eq("slug", slug)
     .eq("status", "published")
     .maybeSingle<EventRow>();
@@ -236,6 +238,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} />
             )}
           </QueueGate>
+          {event.presale_enabled && <PresaleRegister eventId={event.id} />}
           <WaitlistForm eventId={event.id} />
         </aside>
       </div>

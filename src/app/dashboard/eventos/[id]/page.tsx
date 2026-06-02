@@ -10,6 +10,7 @@ import { EventVenueMap, type PublishedMap, type ZonePrice } from "@/components/d
 import { ServicesManager, type ServiceRow } from "@/components/dashboard/ServicesManager";
 import { CampaignComposer } from "@/components/dashboard/CampaignComposer";
 import { QueueControl } from "@/components/dashboard/QueueControl";
+import { PresaleControl } from "@/components/dashboard/PresaleControl";
 
 export const dynamic = "force-dynamic";
 
@@ -19,9 +20,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled")
+    .select("id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
     .eq("id", id)
-    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean }>();
+    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -82,6 +83,8 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
   const { data: buyerRows } = await db.from("orders").select("buyer_email").eq("event_id", id).eq("status", "paid");
   const buyersCount = new Set((buyerRows ?? []).map((o) => o.buyer_email)).size;
   const { count: waitlistCount } = await db.from("waitlist").select("id", { count: "exact", head: true }).eq("event_id", id);
+  const { count: presaleReg } = await db.from("presale_registrations").select("id", { count: "exact", head: true }).eq("event_id", id);
+  const { count: presaleSel } = await db.from("presale_registrations").select("id", { count: "exact", head: true }).eq("event_id", id).eq("selected", true);
 
   return (
     <div className="mx-auto max-w-3xl">
@@ -132,6 +135,11 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
       {/* Cola virtual (alta demanda) */}
       <div className="mb-6">
         <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} maxPerBuyer={event.max_tickets_per_buyer} safetix={event.safetix_enabled} />
+      </div>
+
+      {/* Verified Fan / Presale */}
+      <div className="mb-6">
+        <PresaleControl eventId={id} enabled={event.presale_enabled} endsAt={event.presale_ends_at} registered={presaleReg ?? 0} selected={presaleSel ?? 0} />
       </div>
 
       {/* Email a compradores + lista de espera */}

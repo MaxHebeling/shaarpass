@@ -241,6 +241,34 @@ export async function setQueueConfig(form: { eventId: string; enabled: boolean; 
   return { ok: true };
 }
 
+export async function setPresaleConfig(form: { eventId: string; enabled: boolean; endsAt: string | null }) {
+  const db = await createClient();
+  const { error } = await db.from("events").update({
+    presale_enabled: form.enabled,
+    presale_ends_at: form.endsAt ? new Date(form.endsAt).toISOString() : null,
+  }).eq("id", form.eventId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function runPresaleLottery(eventId: string, count: number) {
+  const { sendBulkEmail } = await import("@/lib/email/campaigns");
+  const db = await createClient();
+  const { data: n, error } = await db.rpc("run_presale_lottery", { p_event: eventId, p_count: Math.max(0, Math.round(count)) });
+  if (error) return { error: error.message };
+  // Envía códigos a los seleccionados sin avisar (no-op sin Resend).
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
+  const { data: winners } = await db.from("presale_registrations")
+    .select("email, code").eq("event_id", eventId).eq("selected", true).is("used_at", null);
+  for (const w of winners ?? []) {
+    if (w.code) await sendBulkEmail([w.email], "¡Fuiste seleccionado para el presale!",
+      `Tu código de acceso anticipado: ${w.code}\nCómpralo aquí: ${base}`);
+  }
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true, selected: n as number };
+}
+
 export async function signOut() {
   const db = await createClient();
   await db.auth.signOut();

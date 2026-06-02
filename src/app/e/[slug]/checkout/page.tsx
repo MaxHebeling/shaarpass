@@ -32,6 +32,7 @@ export default function CheckoutPage() {
   // Servicios/extras
   const [services, setServices] = useState<Service[]>([]);
   const [svcQty, setSvcQty] = useState<Record<string, number>>({});
+  const [presaleCode, setPresaleCode] = useState("");
 
   useEffect(() => {
     const raw = sessionStorage.getItem(`cart:${slug}`);
@@ -100,6 +101,7 @@ export default function CheckoutPage() {
           items: cart.items.map((i) => ({ ticketTypeId: i.ticketTypeId, quantity: i.quantity, seatIds: i.seatIds, eventSeatIds: i.eventSeatIds })),
           services: services.filter((s) => (svcQty[s.id] ?? 0) > 0).map((s) => ({ serviceId: s.id, quantity: svcQty[s.id] })),
           queueToken: sessionStorage.getItem(`queue:${cart.eventId}`) ?? undefined,
+          presaleCode: presaleCode || undefined,
         }),
       });
       const data = await res.json();
@@ -218,6 +220,14 @@ export default function CheckoutPage() {
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@correo.com"
               className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60"
+            />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-muted">Código de presale (si aplica)</label>
+            <input
+              value={presaleCode} onChange={(e) => setPresaleCode(e.target.value.toUpperCase())}
+              placeholder="Acceso anticipado"
+              className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm uppercase outline-none focus:border-fuchsia/60"
             />
           </div>
           {error && <p className="text-sm text-fuchsia">{error}</p>}

@@ -23,6 +23,7 @@ const Body = z.object({
     .min(1),
   services: z.array(z.object({ serviceId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).optional(),
   queueToken: z.string().optional(),
+  presaleCode: z.string().optional(),
 });
 
 export async function POST(req: Request) {
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "payload inválido" }, { status: 400 });
   }
-  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services, queueToken } = parsed.data;
+  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services, queueToken, presaleCode } = parsed.data;
   const db = createAdminClient();
 
   // Rate limit por IP (anti-abuso): máx 30 intentos de checkout / minuto.
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, max_tickets_per_buyer, organizations(stripe_account_id, payouts_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, payouts_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -62,6 +63,13 @@ export async function POST(req: Request) {
   if (event.queue_enabled) {
     const { data: ok } = await db.rpc("is_queue_admitted", { p_event: eventId, p_token: queueToken ?? "" });
     if (!ok) return NextResponse.json({ error: "Tu turno en la cola expiró o no es válido. Vuelve a la fila." }, { status: 403 });
+  }
+
+  // Presale (Verified Fan): durante la ventana, exige un código válido.
+  const inPresale = event.presale_enabled && (!event.presale_ends_at || new Date(event.presale_ends_at) > new Date());
+  if (inPresale) {
+    const { data: ok } = await db.rpc("validate_presale_code", { p_event: eventId, p_code: presaleCode ?? "" });
+    if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
   const org = event.organizations as unknown as { stripe_account_id: string | null; payouts_enabled: boolean };
   if (!org?.stripe_account_id || !org.payouts_enabled) {
@@ -200,6 +208,10 @@ export async function POST(req: Request) {
   // Consume el turno en la cola (ya entró a comprar).
   if (event.queue_enabled && queueToken) {
     await db.rpc("mark_queue_used", { p_token: queueToken });
+  }
+  // Consume el código de presale (un solo uso).
+  if (inPresale && presaleCode) {
+    await db.rpc("consume_presale_code", { p_event: eventId, p_code: presaleCode });
   }
 
   // 4) PaymentIntent con destination charge: el neto va al organizador,
