@@ -36,13 +36,15 @@ export function CanvasSeatLayer({
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
 
-    // Auto-fit: encuadra la zona al canvas mientras el usuario no haya hecho zoom/pan.
+    // Auto-fit anclado arriba-izquierda (determinístico) mientras no haya zoom/pan manual.
     const b = bounds.current;
     if (!view.current.userMoved) {
-      const s = Math.min(cssW / b.w, cssH / b.h) * 0.92;
+      const m = 10;
+      const s = Math.min((cssW - 2 * m) / b.w, (cssH - 2 * m) / b.h);
       view.current.scale = s;
-      view.current.ox = (cssW - b.w * s) / 2 - b.minX * s;
-      view.current.oy = (cssH - b.h * s) / 2 - b.minY * s;
+      // centra en X si sobra ancho; ancla arriba en Y
+      view.current.ox = Math.max(m, (cssW - b.w * s) / 2) - b.minX * s;
+      view.current.oy = m - b.minY * s;
     }
     const { scale, ox, oy } = view.current;
     const r = Math.max(1.5, scale * 0.32);

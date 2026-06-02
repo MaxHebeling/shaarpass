@@ -31,10 +31,21 @@ export function SalesMap({
     if (!openZone) return;
     let channel: ReturnType<typeof db.channel> | null = null;
     setLoadingSeats(true);
+    // Pagina para superar el límite de 1000 filas de PostgREST (zonas grandes).
+    async function fetchAll<T>(table: string, cols: string, filters: (q: any) => any): Promise<T[]> {
+      const out: T[] = [];
+      for (let from = 0; ; from += 1000) {
+        const { data } = await filters(db.from(table).select(cols)).range(from, from + 999);
+        if (!data?.length) break;
+        out.push(...(data as T[]));
+        if (data.length < 1000) break;
+      }
+      return out;
+    }
     (async () => {
-      const [{ data: geo }, { data: es }] = await Promise.all([
-        db.from("venue_seats_geo").select("id, label, x, y").eq("zone_id", openZone.id),
-        db.from("event_seats").select("id, venue_seat_id, status").eq("event_id", eventId).eq("zone_id", openZone.id),
+      const [geo, es] = await Promise.all([
+        fetchAll<{ id: string; label: string; x: number; y: number }>("venue_seats_geo", "id, label, x, y", (q) => q.eq("zone_id", openZone.id)),
+        fetchAll<{ id: string; venue_seat_id: string; status: string }>("event_seats", "id, venue_seat_id, status", (q) => q.eq("event_id", eventId).eq("zone_id", openZone.id)),
       ]);
       const statusByVs = new Map((es ?? []).map((r) => [r.venue_seat_id, { id: r.id, status: r.status }]));
       const merged: SeatPoint[] = (geo ?? []).map((g) => {
