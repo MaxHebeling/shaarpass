@@ -1,13 +1,10 @@
-import { Ticket } from "lucide-react";
 
 export function Footer() {
   return (
     <footer className="border-t border-line px-6 py-12">
       <div className="mx-auto flex max-w-6xl flex-col items-center justify-between gap-6 md:flex-row">
-        <div className="flex items-center gap-2 font-display text-lg font-bold">
-          <span className="brand-gradient grid h-8 w-8 place-items-center rounded-xl text-ink">
-            <Ticket className="h-4 w-4" strokeWidth={2.5} />
-          </span>
+        <div className="flex items-center gap-2.5 font-display text-lg font-bold">
+          <img src="/logo-mark.png" alt="ShaarPass" className="h-9 w-9 rounded-xl" />
           ShaarPass
         </div>
         <p className="text-sm text-muted">Te quedas con más de cada boleto.</p>

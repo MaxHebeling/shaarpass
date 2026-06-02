@@ -1,7 +1,6 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Ticket } from "lucide-react";
 
 export function Nav() {
   const [scrolled, setScrolled] = useState(false);
@@ -23,10 +22,8 @@ export function Nav() {
           scrolled ? "glass py-2.5 shadow-2xl shadow-black/40" : "py-2"
         }`}
       >
-        <a href="/" className="flex items-center gap-2 font-display text-lg font-bold tracking-tight">
-          <span className="brand-gradient grid h-8 w-8 place-items-center rounded-xl text-ink shadow-lg shadow-fuchsia/30">
-            <Ticket className="h-4 w-4" strokeWidth={2.5} />
-          </span>
+        <a href="/" className="flex items-center gap-2.5 font-display text-lg font-bold tracking-tight">
+          <img src="/logo-mark.png" alt="ShaarPass" className="h-9 w-9 rounded-xl shadow-lg shadow-fuchsia/20" />
           ShaarPass
         </a>
 

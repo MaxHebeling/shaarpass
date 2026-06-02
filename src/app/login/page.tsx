@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { Ticket, Loader2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
 
 function LoginInner() {
@@ -35,11 +35,8 @@ function LoginInner() {
   return (
     <main className="aurora relative grid min-h-screen place-items-center px-6">
       <div className="glass relative z-10 w-full max-w-sm rounded-3xl p-8">
-        <div className="mb-6 flex items-center gap-2 font-display text-xl font-bold">
-          <span className="brand-gradient grid h-9 w-9 place-items-center rounded-xl text-ink">
-            <Ticket className="h-5 w-5" strokeWidth={2.5} />
-          </span>
-          ShaarPass
+        <div className="mb-6 flex justify-center">
+          <img src="/logo-full.png" alt="ShaarPass" className="h-24 w-auto" />
         </div>
         <h1 className="font-display text-2xl font-bold">
           {mode === "in" ? "Bienvenido de vuelta" : "Crea tu cuenta"}

@@ -7,3 +7,7 @@ out
 *.log
 .vercel
 next-env.d.ts
+
+# logo fuente sin optimizar (no versionar)
+logos Shaarpass*
+*-gigapixel-*

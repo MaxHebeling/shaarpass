@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { Ticket, LayoutDashboard, Plus, LogOut, Wallet, ScanLine, Map, Layers, Palette } from "lucide-react";
+import { LayoutDashboard, Plus, LogOut, Wallet, ScanLine, Map, Layers, Palette } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 
@@ -11,10 +11,8 @@ export default async function DashboardLayout({ children }: { children: ReactNod
   return (
     <div className="flex min-h-screen">
       <aside className="hidden w-60 shrink-0 flex-col border-r border-line bg-ink-2/50 p-5 md:flex">
-        <Link href="/dashboard" className="mb-8 flex items-center gap-2 font-display text-lg font-bold">
-          <span className="brand-gradient grid h-8 w-8 place-items-center rounded-xl text-ink">
-            <Ticket className="h-4 w-4" strokeWidth={2.5} />
-          </span>
+        <Link href="/dashboard" className="mb-8 flex items-center gap-2.5 font-display text-lg font-bold">
+          <img src="/logo-mark.png" alt="ShaarPass" className="h-9 w-9 rounded-xl" />
           ShaarPass
         </Link>
 
