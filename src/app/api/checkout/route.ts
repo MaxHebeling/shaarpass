@@ -33,6 +33,11 @@ export async function POST(req: Request) {
   const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services, queueToken } = parsed.data;
   const db = createAdminClient();
 
+  // Rate limit por IP (anti-abuso): máx 30 intentos de checkout / minuto.
+  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `checkout:${ip}`, p_max: 30, p_window_seconds: 60 });
+  if (rlOk === false) return NextResponse.json({ error: "Demasiados intentos, espera un momento" }, { status: 429 });
+
   // Idempotencia: si ya existe una orden con esta key, devuélvela tal cual.
   const { data: existing } = await db
     .from("orders")
@@ -46,7 +51,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, organizations(stripe_account_id, payouts_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, max_tickets_per_buyer, organizations(stripe_account_id, payouts_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -96,6 +101,17 @@ export async function POST(req: Request) {
   // 2) Subtotal bruto + descuento (promo) autoritativo + fee transparente.
   const grossCents = items.reduce((s, it) => s + (priceOf.get(it.ticketTypeId) ?? 0) * it.quantity, 0);
   const ticketCount = items.reduce((s, it) => s + it.quantity, 0);
+
+  // Límite de boletos por comprador (anti-acaparamiento).
+  if (event.max_tickets_per_buyer != null) {
+    if (ticketCount > event.max_tickets_per_buyer) {
+      return NextResponse.json({ error: `Máximo ${event.max_tickets_per_buyer} boletos por persona` }, { status: 409 });
+    }
+    const { data: prior } = await db.rpc("buyer_ticket_count", { p_event: eventId, p_email: buyerEmail });
+    if ((prior ?? 0) + ticketCount > event.max_tickets_per_buyer) {
+      return NextResponse.json({ error: `Ya alcanzaste el límite de ${event.max_tickets_per_buyer} boletos para este evento` }, { status: 409 });
+    }
+  }
 
   let discountCents = 0;
   let promoId: string | null = null;

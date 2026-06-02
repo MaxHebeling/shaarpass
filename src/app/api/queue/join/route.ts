@@ -23,6 +23,10 @@ export async function POST(req: Request) {
   const token = crypto.randomUUID();
 
   const db = createPublicClient();
+
+  // Rate limit: máx 20 intentos de unirse / minuto por IP.
+  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `join:${ip}`, p_max: 20, p_window_seconds: 60 });
+  if (rlOk === false) return NextResponse.json({ error: "Demasiados intentos, espera un momento" }, { status: 429 });
   const { data, error } = await db.rpc("join_queue", { p_event: parsed.data.eventId, p_token: token, p_identity: identity });
   if (error) return NextResponse.json({ error: error.message }, { status: 409 });
   const row = Array.isArray(data) ? data[0] : data;
