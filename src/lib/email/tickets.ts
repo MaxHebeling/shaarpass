@@ -14,6 +14,10 @@ export interface SendTicketsParams {
   totalCents: number;
   tickets: EmailTicket[];
   safetix?: boolean;
+  // Marca del organizador (white-label).
+  logoUrl?: string | null;
+  brand?: string | null;
+  whiteLabel?: boolean;
 }
 
 /** Envía los boletos con QR por email (Resend). No-op si no hay key configurada. */
@@ -44,8 +48,16 @@ export async function sendTicketEmail(p: SendTicketsParams): Promise<{ sent: boo
     )
     .join("");
 
+  const logoHtml = p.logoUrl
+    ? `<img src="${p.logoUrl}" alt="${p.brand ?? ""}" style="max-height:48px;max-width:180px;margin:0 0 16px;display:block" />`
+    : "";
+  const footer = p.whiteLabel
+    ? (p.brand ? `Enviado por ${p.brand}.` : "")
+    : "Enviado por ShaarPass — te quedas con más de cada boleto.";
+
   const html = `
   <div style="max-width:520px;margin:0 auto;font-family:system-ui,sans-serif;background:#08080c;color:#f4f4f7;padding:32px;border-radius:24px">
+    ${logoHtml}
     <h1 style="font-size:24px;margin:0 0 4px">🎟️ Tus boletos</h1>
     <p style="color:#9a9ab0;margin:0 0 20px">${p.eventTitle} · ${p.eventDate}</p>
     ${ticketsHtml}
@@ -53,7 +65,7 @@ export async function sendTicketEmail(p: SendTicketsParams): Promise<{ sent: boo
       Total pagado: <strong style="color:#f5c451">${money(p.totalCents, p.currency)}</strong><br/>
       Presenta cada código QR en la entrada. ¡Nos vemos ahí!
     </p>
-    <p style="color:#6b6b80;font-size:11px;margin-top:24px">Enviado por ShaarPass — te quedas con más de cada boleto.</p>
+    ${footer ? `<p style="color:#6b6b80;font-size:11px;margin-top:24px">${footer}</p>` : ""}
   </div>`;
 
   try {

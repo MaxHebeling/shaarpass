@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Plus, Loader2 } from "lucide-react";
 import { createSeason } from "@/app/dashboard/actions";
+import { CURRENCIES } from "@/lib/currencies";
 
 export function CreateSeasonForm() {
   const [open, setOpen] = useState(false);
@@ -50,8 +51,7 @@ export function CreateSeasonForm() {
             className="rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
           <select value={currency} onChange={(e) => setCurrency(e.target.value)}
             className="rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60">
-            <option value="mxn">MXN</option>
-            <option value="usd">USD</option>
+            {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.code.toUpperCase()}</option>)}
           </select>
         </div>
         {error && <p className="text-sm text-fuchsia">{error}</p>}

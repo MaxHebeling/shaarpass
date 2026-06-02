@@ -10,6 +10,7 @@ export default function MobileTicketPage() {
   const [payload, setPayload] = useState<string | null>(null);
   const [secsLeft, setSecsLeft] = useState(15);
   const [error, setError] = useState(false);
+  const [brand, setBrand] = useState<{ name: string; logoUrl: string | null; whiteLabel: boolean } | null>(null);
   // Gestión: transferir / revender
   const [open, setOpen] = useState<"none" | "transfer" | "resale">("none");
   const [toEmail, setToEmail] = useState("");
@@ -40,6 +41,7 @@ export default function MobileTicketPage() {
       const data = await res.json();
       if (!res.ok || !data.payload) { setError(true); return; }
       setPayload(data.payload);
+      if (data.brand) setBrand(data.brand);
       setSecsLeft(15);
     } catch { setError(true); }
   }
@@ -51,7 +53,13 @@ export default function MobileTicketPage() {
     <main className="grid min-h-screen place-items-center px-6">
       <div className="glass w-full max-w-sm rounded-3xl p-7 text-center">
         <div className="mb-1 flex items-center justify-center gap-2 font-display text-lg font-bold">
-          <span className="brand-gradient grid h-7 w-7 place-items-center rounded-lg text-ink text-xs">SP</span> ShaarPass
+          {brand?.logoUrl ? (
+            <img src={brand.logoUrl} alt={brand.name} className="max-h-9 max-w-[160px] object-contain" />
+          ) : brand?.whiteLabel ? (
+            <span>{brand.name}</span>
+          ) : (
+            <><span className="brand-gradient grid h-7 w-7 place-items-center rounded-lg text-ink text-xs">SP</span> ShaarPass</>
+          )}
         </div>
         <p className="mb-5 text-xs text-muted">Tu boleto · preséntalo en la entrada</p>
 

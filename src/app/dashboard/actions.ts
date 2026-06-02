@@ -331,6 +331,24 @@ export async function publishSeason(seasonId: string, publish: boolean) {
   return { ok: true };
 }
 
+// ─── Marca / White-label (TM) ────────────────────────────────────────────────
+
+export async function saveBranding(form: { logoUrl: string | null; brandColor: string | null; whiteLabel: boolean }) {
+  const db = await createClient();
+  const orgId = await currentOrgId(db);
+  if (!orgId) return { error: "Sin organización" };
+  const color = form.brandColor?.trim() || null;
+  if (color && !/^#[0-9a-fA-F]{6}$/.test(color)) return { error: "Color inválido (usa formato #RRGGBB)" };
+  const { error } = await db.from("organizations").update({
+    logo_url: form.logoUrl?.trim() || null,
+    brand_color: color,
+    white_label: form.whiteLabel,
+  }).eq("id", orgId);
+  if (error) return { error: error.message };
+  revalidatePath("/dashboard/marca");
+  return { ok: true };
+}
+
 export async function signOut() {
   const db = await createClient();
   await db.auth.signOut();

@@ -18,14 +18,16 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   const db = createPublicClient();
   const { data: e } = await db
     .from("events")
-    .select("title, description, cover_image, city, region")
+    .select("title, description, cover_image, city, region, organizations(name, white_label)")
     .eq("slug", slug)
     .eq("status", "published")
-    .maybeSingle<{ title: string; description: string | null; cover_image: string | null; city: string | null; region: string | null }>();
+    .maybeSingle<{ title: string; description: string | null; cover_image: string | null; city: string | null; region: string | null; organizations: { name: string; white_label: boolean } | null }>();
 
   if (!e) return { title: "Evento | ShaarPass" };
   const place = [e.city, e.region].filter(Boolean).join(", ");
-  const title = `${e.title}${place ? ` · ${place}` : ""} | ShaarPass`;
+  // White-label: la marca en el título es la del organizador, no ShaarPass.
+  const brand = e.organizations?.white_label ? (e.organizations?.name ?? "") : "ShaarPass";
+  const title = `${e.title}${place ? ` · ${place}` : ""}${brand ? ` | ${brand}` : ""}`;
   const description = (e.description ?? `Compra boletos para ${e.title}.`).slice(0, 160);
   return {
     title,
@@ -51,7 +53,7 @@ interface EventRow {
   queue_enabled: boolean;
   onsale_at: string | null;
   presale_enabled: boolean;
-  organizations: { name: string } | null;
+  organizations: { name: string; logo_url: string | null; brand_color: string | null; white_label: boolean } | null;
   venues: { name: string; address: string | null; city: string | null } | null;
 }
 
@@ -70,7 +72,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const { data: event } = await db
     .from("events")
-    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, presale_enabled, organizations(name), venues(name, address, city)")
+    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, presale_enabled, organizations(name, logo_url, brand_color, white_label), venues(name, address, city)")
     .eq("slug", slug)
     .eq("status", "published")
     .maybeSingle<EventRow>();
@@ -198,8 +200,18 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-6xl px-6 pb-8">
+          {event.organizations?.logo_url && (
+            <img
+              src={event.organizations.logo_url}
+              alt={event.organizations.name}
+              className="mb-4 h-14 w-auto max-w-[180px] object-contain drop-shadow-lg"
+            />
+          )}
           {event.category && (
-            <span className="glass mb-3 inline-block rounded-full px-3 py-1 text-xs font-medium text-gold">
+            <span
+              className="glass mb-3 inline-block rounded-full px-3 py-1 text-xs font-medium"
+              style={{ color: event.organizations?.brand_color ?? "var(--color-gold)" }}
+            >
               {event.category}
             </span>
           )}

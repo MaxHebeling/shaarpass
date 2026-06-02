@@ -8,11 +8,20 @@ export const OUR_FIXED_CENTS = 50;    // + $0.50 por boleto
  * Varía por país/moneda. Override por env en el servidor; aquí, defaults por moneda.
  */
 export function processingRate(currency = "usd"): { pct: number; fixed: number } {
+  // Tarifas de Stripe por país/moneda (aprox). Override global por env. El default
+  // cubre la mayoría de mercados; ajustable por organizador en el futuro.
   switch (currency.toLowerCase()) {
     case "mxn": return { pct: 3.6, fixed: 300 };  // Stripe MX ≈ 3.6% + $3 MXN
     case "usd": return { pct: 2.9, fixed: 30 };   // Stripe US ≈ 2.9% + $0.30
+    case "cad": return { pct: 2.9, fixed: 30 };
     case "eur": return { pct: 2.5, fixed: 25 };
-    default:    return { pct: 2.9, fixed: 30 };
+    case "gbp": return { pct: 2.5, fixed: 20 };
+    case "aud": return { pct: 2.9, fixed: 30 };
+    case "nzd": return { pct: 2.9, fixed: 30 };
+    case "sgd": return { pct: 3.4, fixed: 50 };
+    case "brl": return { pct: 3.99, fixed: 39 };
+    case "inr": return { pct: 3.0, fixed: 300 };
+    default:    return { pct: 3.2, fixed: 30 };   // global razonable (override por env)
   }
 }
 

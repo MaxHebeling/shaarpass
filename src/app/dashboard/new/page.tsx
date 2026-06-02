@@ -3,6 +3,7 @@
 import { useState, useTransition } from "react";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { createEvent, type TicketTypeInput } from "../actions";
+import { CURRENCIES } from "@/lib/currencies";
 
 const field = "w-full rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-sm outline-none transition focus:border-fuchsia/60";
 const label = "mb-1.5 block text-xs text-muted";
@@ -96,8 +97,7 @@ export default function NewEventPage() {
             <div>
               <label className={label}>Moneda</label>
               <select name="currency" defaultValue="mxn" className={field}>
-                <option value="mxn">MXN</option>
-                <option value="usd">USD</option>
+                {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
               </select>
             </div>
           </div>

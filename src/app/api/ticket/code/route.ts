@@ -15,5 +15,14 @@ export async function GET(req: Request) {
 
   // Sin secreto/legacy → payload = el token estático.
   const payload = row.otp ? `${row.bearer}.${row.otp}.${row.counter}` : row.bearer;
-  return NextResponse.json({ payload, refreshSeconds: 15 });
+
+  // Marca del organizador (white-label).
+  const { data: bd } = await db.rpc("ticket_brand", { p_token: token });
+  const brand = Array.isArray(bd) ? bd[0] : bd;
+
+  return NextResponse.json({
+    payload,
+    refreshSeconds: 15,
+    brand: brand ? { name: brand.name, logoUrl: brand.logo_url, whiteLabel: brand.white_label } : null,
+  });
 }

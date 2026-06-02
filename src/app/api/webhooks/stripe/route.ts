@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         // Envía los boletos con QR por email.
         const { data: order } = await db
           .from("orders")
-          .select("buyer_email, total_cents, currency, events(title, starts_at, timezone, safetix_enabled)")
+          .select("buyer_email, total_cents, currency, events(title, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
           .eq("id", orderId)
           .single();
         const { data: tks } = await db
@@ -101,6 +101,7 @@ export async function POST(req: Request) {
 
         if (order && tks?.length) {
           const ev = order.events as unknown as { title: string; starts_at: string; timezone: string; safetix_enabled: boolean };
+          const org = order.organizations as unknown as { name: string; logo_url: string | null; white_label: boolean } | null;
           await sendTicketEmail({
             to: order.buyer_email,
             eventTitle: ev?.title ?? "Tu evento",
@@ -110,6 +111,9 @@ export async function POST(req: Request) {
             currency: order.currency,
             totalCents: order.total_cents,
             safetix: ev?.safetix_enabled,
+            logoUrl: org?.logo_url ?? null,
+            brand: org?.name ?? null,
+            whiteLabel: org?.white_label ?? false,
             tickets: tks.map((t) => ({
               qr_token: t.qr_token,
               typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto",
