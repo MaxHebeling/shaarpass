@@ -85,6 +85,29 @@ export function SalesMap({
     return { subtotal, fee, total: subtotal + fee };
   }, [chosen]);
 
+  // TM-5: filtro de precio (macro) + best-available (zona).
+  const priceRange = useMemo(() => {
+    const ps = zones.map((z) => z.priceCents).filter((p) => p > 0);
+    return { min: ps.length ? Math.min(...ps) : 0, max: ps.length ? Math.max(...ps) : 0 };
+  }, [zones]);
+  const [maxPrice, setMaxPrice] = useState(0);
+  useEffect(() => { if (priceRange.max) setMaxPrice(priceRange.max); }, [priceRange.max]);
+  const [bestN, setBestN] = useState(2);
+
+  function pickBest() {
+    if (!openZone?.ticketTypeId) return;
+    const avail = seats.filter((s) => s.status === "available" && !selected[s.id]);
+    if (!avail.length) return;
+    const cx = avail.reduce((a, s) => a + s.x, 0) / avail.length;
+    const ranked = [...avail].sort((a, b) => a.y - b.y || Math.abs(a.x - cx) - Math.abs(b.x - cx));
+    const pick = ranked.slice(0, Math.max(1, bestN));
+    setSelected((cur) => {
+      const next = { ...cur };
+      for (const s of pick) next[s.id] = { zoneId: openZone.id, ticketTypeId: openZone.ticketTypeId!, priceCents: openZone.priceCents, label: `${openZone.name} ${s.label}` };
+      return next;
+    });
+  }
+
   function checkout() {
     setGoing(true);
     const byTier = new Map<string, { ids: string[]; labels: string[]; price: number; name: string }>();
@@ -104,14 +127,25 @@ export function SalesMap({
       {!openZone ? (
         <>
           <h3 className="font-display text-lg font-semibold">Elige tu zona</h3>
+          {priceRange.max > priceRange.min && (
+            <div className="mt-3 flex items-center gap-3 text-sm">
+              <span className="text-muted">Precio hasta</span>
+              <input type="range" min={priceRange.min} max={priceRange.max} step={100} value={maxPrice}
+                onChange={(e) => setMaxPrice(Number(e.target.value))}
+                className="h-2 flex-1 cursor-pointer appearance-none rounded-full bg-surface-2 accent-fuchsia [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-gold" />
+              <span className="font-display font-bold text-gold">{money(maxPrice, currency)}</span>
+            </div>
+          )}
           <svg viewBox={`0 0 ${widthM} ${heightM}`} style={{ aspectRatio: `${widthM}/${heightM}` }} className="mt-3 w-full rounded-2xl bg-ink-2">
             <text x={widthM / 2} y={2.5} textAnchor="middle" fontSize={1.6} fill="#9a9ab0">ESCENARIO</text>
             {zones.map((z) => {
               const cx = z.points.reduce((s, p) => s + p[0], 0) / z.points.length;
               const cy = z.points.reduce((s, p) => s + p[1], 0) / z.points.length;
               const soldOut = z.available === 0;
+              const tooExpensive = z.priceCents > 0 && z.priceCents > maxPrice;
+              const blocked = soldOut || tooExpensive;
               return (
-                <g key={z.id} onClick={() => !soldOut && setOpenZone(z)} style={{ cursor: soldOut ? "not-allowed" : "pointer" }}>
+                <g key={z.id} onClick={() => !blocked && setOpenZone(z)} style={{ cursor: blocked ? "not-allowed" : "pointer" }} opacity={tooExpensive ? 0.25 : 1}>
                   <polygon points={z.points.map((p) => p.join(",")).join(" ")} fill={z.color} fillOpacity={soldOut ? 0.15 : 0.3} stroke={z.color} strokeWidth={0.2} />
                   <text x={cx} y={cy - 0.5} textAnchor="middle" fontSize={1.5} fill="#f4f4f7" fontWeight="bold">{z.name}</text>
                   <text x={cx} y={cy + 1.4} textAnchor="middle" fontSize={1.1} fill="#f5c451">{z.priceCents > 0 ? money(z.priceCents, currency) : "—"}</text>
@@ -128,6 +162,12 @@ export function SalesMap({
             <ArrowLeft className="h-4 w-4" /> Zonas
           </button>
           <h3 className="font-display text-lg font-semibold" style={{ color: openZone.color }}>{openZone.name} · {money(openZone.priceCents, currency)}</h3>
+          <div className="mt-2 flex items-center gap-2 text-sm">
+            <span className="text-muted">Mejores</span>
+            <input type="number" min={1} max={10} value={bestN} onChange={(e) => setBestN(Number(e.target.value))}
+              className="w-16 rounded-lg border border-line bg-surface/60 px-2 py-1.5 text-sm outline-none focus:border-fuchsia/60" />
+            <button onClick={pickBest} className="brand-gradient rounded-lg px-3 py-1.5 text-sm font-semibold text-ink">✨ Elegir mejores asientos</button>
+          </div>
           <div className="relative mt-3 rounded-2xl bg-ink-2 p-2">
             {loadingSeats ? (
               <div className="grid h-40 place-items-center text-muted"><Loader2 className="h-6 w-6 animate-spin" /></div>
