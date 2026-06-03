@@ -1,7 +1,8 @@
 import { notFound } from "next/navigation";
 import type { Metadata } from "next";
 import Image from "next/image";
-import { Calendar, MapPin, Clock, Ticket, Share2 } from "lucide-react";
+import Link from "next/link";
+import { Calendar, MapPin, Clock, Ticket, Share2, ArrowRight } from "lucide-react";
 import { createPublicClient } from "@/lib/supabase/public";
 import { TicketSelector, type SelectableTicket } from "@/components/event/TicketSelector";
 import { SeatMap, type SeatData, type TierInfo } from "@/components/event/SeatMap";
@@ -262,6 +263,28 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <WaitlistForm eventId={event.id} />
         </aside>
       </div>
+
+      {/* Loop de crecimiento: cada evento público recluta organizadores.
+          Se oculta en modo exclusivo (white-label). */}
+      {!event.organizations?.white_label && (
+        <aside className="mx-auto mt-16 max-w-6xl">
+          <div className="glass ring-grad flex flex-col items-center justify-between gap-4 rounded-3xl px-6 py-7 text-center sm:flex-row sm:text-left">
+            <div className="flex items-center gap-3">
+              <img src="/logo-mark.png" alt="ShaarPass" className="hidden h-11 w-11 rounded-xl sm:block" />
+              <div>
+                <div className="font-display text-lg font-semibold">¿Tú organizas eventos?</div>
+                <p className="mt-0.5 text-sm text-muted">Vende tus boletos con la comisión más baja y transparente del mercado. Publicar es gratis.</p>
+              </div>
+            </div>
+            <div className="flex shrink-0 items-center gap-3">
+              <Link href="/como-funciona" className="hidden text-sm text-muted transition hover:text-fg sm:block">Cómo funciona</Link>
+              <Link href="/login" className="brand-gradient flex items-center gap-2 rounded-full px-6 py-3 text-sm font-semibold text-ink transition hover:scale-[1.03]">
+                Crear mi evento gratis <ArrowRight className="h-4 w-4" />
+              </Link>
+            </div>
+          </div>
+        </aside>
+      )}
     </main>
   );
 }
