@@ -11,3 +11,5 @@ next-env.d.ts
 # logo fuente sin optimizar (no versionar)
 logos Shaarpass*
 *-gigapixel-*
+
+favicon-13/
