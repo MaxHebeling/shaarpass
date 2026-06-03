@@ -20,9 +20,15 @@ export function Footer() {
           <a href="mailto:tickets@shaarpass.io" className="transition hover:text-fg">Contacto</a>
         </div>
       </div>
-      <p className="mt-8 text-center text-xs text-muted/60">
-        © 2026 ShaarPass. Hecho para organizadores que merecen más.
-      </p>
+      <div className="mt-8 flex flex-col items-center justify-between gap-2 text-xs text-muted/60 sm:flex-row">
+        <p>
+          © 2026 ShaarPass · Desarrollado por{" "}
+          <a href="https://www.ikingdom.org" target="_blank" rel="noopener noreferrer" className="transition hover:text-fg">
+            iKingdom
+          </a>
+        </p>
+        <p>Hecho para organizadores que merecen más.</p>
+      </div>
     </footer>
   );
 }
