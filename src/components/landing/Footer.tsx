@@ -13,6 +13,7 @@ export function Footer() {
           <a href="/precios" className="transition hover:text-fg">Precios</a>
           <a href="/como-funciona" className="transition hover:text-fg">Cómo funciona</a>
           <a href="/nosotros" className="transition hover:text-fg">Nosotros</a>
+          <a href="/blog" className="transition hover:text-fg">Blog</a>
           <a href="/login" className="transition hover:text-fg">Entrar</a>
           <a href="/terminos" className="transition hover:text-fg">Términos</a>
           <a href="/privacidad" className="transition hover:text-fg">Privacidad</a>

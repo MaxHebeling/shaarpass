@@ -1,6 +1,7 @@
 import type { MetadataRoute } from "next";
 import { fetchPublishedEvents } from "@/lib/events";
 import { buildGeoSlug, slugify, CATEGORIES } from "@/lib/seo";
+import { allPosts } from "@/lib/blog/posts";
 
 export const dynamic = "force-dynamic";
 
@@ -19,6 +20,8 @@ export default async function sitemap(): Promise<MetadataRoute.Sitemap> {
     { url: `${base}/terminos`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${base}/privacidad`, changeFrequency: "yearly", priority: 0.2 },
     { url: `${base}/reembolsos`, changeFrequency: "yearly", priority: 0.2 },
+    { url: `${base}/blog`, changeFrequency: "weekly", priority: 0.6 },
+    ...allPosts().map((p) => ({ url: `${base}/blog/${p.slug}`, lastModified: new Date(p.dateISO), changeFrequency: "monthly" as const, priority: 0.6 })),
   ];
 
   // Páginas de evento.
