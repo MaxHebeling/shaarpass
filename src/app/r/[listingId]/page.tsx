@@ -1,12 +1,13 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { Elements, PaymentElement, useStripe, useElements } from "@stripe/react-stripe-js";
 import { Loader2, Lock, Repeat2, ShieldCheck } from "lucide-react";
 import { getStripePromise } from "@/lib/stripe/browser";
 import { createClient } from "@/lib/supabase/browser";
 import { money } from "@/lib/money";
+import { resaleBuyerTotal } from "@/lib/ticketing/feeMath";
 
 export default function ResaleCheckout() {
   const { listingId } = useParams<{ listingId: string }>();
@@ -16,6 +17,7 @@ export default function ResaleCheckout() {
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const idem = useRef(crypto.randomUUID());
 
   useEffect(() => {
     createClient().from("listings").select("price_cents, events(currency)").eq("id", listingId).eq("status", "active").maybeSingle()
@@ -25,10 +27,12 @@ export default function ResaleCheckout() {
       });
   }, [listingId]);
 
+  const total = listing ? resaleBuyerTotal(listing.price, listing.currency) : 0;
+
   async function start(e: React.FormEvent) {
     e.preventDefault(); setLoading(true); setError(null);
     try {
-      const res = await fetch("/api/resale/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId, buyerEmail: email }) });
+      const res = await fetch("/api/resale/checkout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ listingId, buyerEmail: email, idempotencyKey: idem.current }) });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo iniciar el pago");
       if (!data.clientSecret) throw new Error("Falta configurar Stripe (claves de pago).");
@@ -43,7 +47,12 @@ export default function ResaleCheckout() {
       <h1 className="font-display text-3xl font-bold">Reventa a precio justo</h1>
       <div className="glass mt-6 rounded-3xl p-6">
         <div className="flex items-center gap-2 text-sm text-emerald-300"><Repeat2 className="h-4 w-4" /> Boleto de otro fan</div>
-        <div className="mt-2 font-display text-3xl font-bold text-gold">{listing ? money(listing.price, listing.currency) : "…"}</div>
+        <div className="mt-2 font-display text-3xl font-bold text-gold">{listing ? money(total, listing.currency) : "…"}</div>
+        {listing && (
+          <p className="mt-1 text-xs text-muted">
+            Boleto {money(listing.price, listing.currency)} + procesamiento de pago
+          </p>
+        )}
         <p className="mt-1 flex items-center gap-1.5 text-xs text-muted"><ShieldCheck className="h-3.5 w-3.5 text-gold" /> Topado al precio original · QR reemitido a tu nombre</p>
 
         {!clientSecret ? (

@@ -136,6 +136,11 @@ export async function POST(req: Request) {
     }
     case "payment_intent.payment_failed": {
       const pi = event.data.object as Stripe.PaymentIntent;
+      // Reventa: libera el listing reservado para que otro pueda comprarlo.
+      if (pi.metadata?.kind === "resale" && pi.metadata?.listing_id) {
+        await db.rpc("release_listing", { p_listing: pi.metadata.listing_id });
+        break;
+      }
       const orderId = pi.metadata?.order_id;
       if (orderId) {
         await db.from("orders").update({ status: "failed" }).eq("id", orderId).eq("status", "pending");

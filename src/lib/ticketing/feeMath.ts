@@ -57,6 +57,18 @@ export function ourFeeCents(
 }
 
 /**
+ * Total que paga el COMPRADOR de una reventa. El vendedor recibe el precio
+ * (topado al original); el comprador paga ese precio + el procesamiento de
+ * Stripe (gross-up), para que la plataforma no pierda dinero en cada reventa.
+ *   T = (precio + procFijo) / (1 − proc%)
+ */
+export function resaleBuyerTotal(priceCents: number, currency = "usd"): number {
+  if (priceCents <= 0) return priceCents;
+  const proc = processingRate(currency);
+  return Math.ceil((priceCents + proc.fixed) / (1 - proc.pct / 100));
+}
+
+/**
  * Comisión de Eventbrite (US, plan Flex):
  * service 3.7% + $1.79/boleto, + processing 2.9% sobre (subtotal + service).
  */
