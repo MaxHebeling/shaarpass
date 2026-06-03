@@ -127,7 +127,10 @@ export async function POST(req: Request) {
     // Connect: la cuenta del organizador cambió de estado.
     case "account.updated": {
       const account = event.data.object as Stripe.Account;
-      const enabled = Boolean(account.charges_enabled && account.payouts_enabled);
+      const enabled = Boolean(
+        account.charges_enabled && account.payouts_enabled && account.details_submitted
+        && !account.requirements?.disabled_reason
+      );
       await db
         .from("organizations")
         .update({ payouts_enabled: enabled })

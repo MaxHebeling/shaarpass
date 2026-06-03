@@ -11,6 +11,10 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
 
   const db = createPublicClient();
+  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `tkt:transfer:${ip}`, p_max: 10, p_window_seconds: 60 });
+  if (rlOk === false) return NextResponse.json({ error: "Demasiados intentos, espera un momento" }, { status: 429 });
+
   const { data: newToken, error } = await db.rpc("transfer_ticket", { p_token: parsed.data.token, p_to_email: parsed.data.toEmail, p_kind: "transfer" });
   if (error) return NextResponse.json({ error: error.message }, { status: 409 });
 

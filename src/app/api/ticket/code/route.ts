@@ -9,6 +9,11 @@ export async function GET(req: Request) {
   if (!token) return NextResponse.json({ error: "falta token" }, { status: 400 });
 
   const db = createPublicClient();
+  // Límite generoso: la página /t hace polling cada 15s (~4/min/pestaña); esto frena fuerza bruta sin romper el uso legítimo.
+  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `tkt:code:${ip}`, p_max: 120, p_window_seconds: 60 });
+  if (rlOk === false) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429 });
+
   const { data } = await db.rpc("ticket_rotating_code", { p_token: token });
   const row = Array.isArray(data) ? data[0] : data;
   if (!row) return NextResponse.json({ error: "boleto no encontrado" }, { status: 404 });

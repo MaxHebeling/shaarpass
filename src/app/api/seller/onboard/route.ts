@@ -23,8 +23,12 @@ export async function POST(req: Request) {
   let email: string | null = null;
   let claim: string | null = parsed.data.claimToken ?? null;
   if (parsed.data.claimToken) {
-    const { data: p } = await db.from("resale_payouts").select("seller_email").eq("claim_token", parsed.data.claimToken).maybeSingle();
-    email = p?.seller_email ?? null;
+    // El enlace de cobro expira a los 30 días (limita el riesgo de un link interceptado).
+    const cutoff = new Date(Date.now() - 30 * 864e5).toISOString();
+    const { data: p } = await db.from("resale_payouts").select("seller_email")
+      .eq("claim_token", parsed.data.claimToken).gte("created_at", cutoff).maybeSingle();
+    if (!p) return NextResponse.json({ error: "El enlace de cobro expiró o no es válido. Escríbenos a tickets@shaarpass.io." }, { status: 410 });
+    email = p.seller_email ?? null;
   } else if (parsed.data.token) {
     const { data: t } = await db.from("tickets").select("attendees(email)").eq("qr_token", parsed.data.token).maybeSingle();
     email = (t?.attendees as unknown as { email: string } | null)?.email ?? null;
