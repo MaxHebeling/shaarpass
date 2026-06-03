@@ -1,11 +1,31 @@
 import Link from "next/link";
 import type { Metadata } from "next";
-import { Ticket, ChevronRight } from "lucide-react";
+import { ChevronRight } from "lucide-react";
 import { fetchPublishedEvents } from "@/lib/events";
 import { EventCard, type EventCardData } from "@/components/discovery/EventCard";
 import { parseGeo, geoLabel, categoryLabel, slugify, CATEGORIES } from "@/lib/seo";
 
 export const dynamic = "force-dynamic";
+
+// Texto único por categoría (evita thin/duplicate content en las páginas /d/).
+const CAT_INTRO: Record<string, string> = {
+  musica: "conciertos, festivales y noches en vivo",
+  conferencias: "conferencias, congresos y charlas",
+  negocios: "expos, networking y eventos de negocios",
+  "comida-y-bebida": "cenas, catas y festivales gastronómicos",
+  arte: "teatro, exposiciones y eventos culturales",
+  deportes: "partidos, torneos y eventos deportivos",
+  comunidad: "eventos de iglesia, ministerios y reuniones comunitarias",
+  tecnologia: "talleres, hackatones y eventos de tecnología",
+};
+
+function buildIntro(geoName: string, catName: string | null, categorySlug?: string): string {
+  if (catName && categorySlug) {
+    const kinds = CAT_INTRO[categorySlug] ?? `${catName.toLowerCase()} y más`;
+    return `¿Buscas ${catName.toLowerCase()} en ${geoName}? Aquí encuentras ${kinds} con boletos a la venta, todo en un solo lugar. Compra con código QR seguro y paga en línea sin complicaciones. Los organizadores de ${geoName} eligen ShaarPass para vender entradas de ${catName.toLowerCase()} con la comisión más baja y transparente del mercado: 2% + $0.50 por boleto, sin cargos ocultos. Si organizas un evento de ${catName.toLowerCase()} en ${geoName}, publícalo gratis y empieza a vender en minutos.`;
+  }
+  return `Descubre los próximos eventos en ${geoName}: conciertos, conferencias, eventos de iglesia, teatro, deportes y más. Compra tus boletos con código QR seguro y la comisión más baja del mercado. ¿Organizas eventos en ${geoName}? Con ShaarPass publicas gratis, cobras a tu cuenta el mismo día y te quedas con más de cada boleto — sin la letra chica de otras plataformas.`;
+}
 
 function filterEvents(events: EventCardData[], geoSlug: string, categorySlug?: string) {
   const geo = parseGeo(geoSlug);
@@ -40,25 +60,41 @@ export default async function DiscoveryPage({ params }: { params: Promise<{ part
   const all = await fetchPublishedEvents({ limit: 200 });
   const events = filterEvents(all, geoSlug, categorySlug);
 
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
   const breadcrumb = {
     "@context": "https://schema.org",
     "@type": "BreadcrumbList",
     itemListElement: [
-      { "@type": "ListItem", position: 1, name: "Inicio", item: "/" },
-      { "@type": "ListItem", position: 2, name: geoName, item: `/d/${geoSlug}` },
-      ...(catName ? [{ "@type": "ListItem", position: 3, name: catName, item: `/d/${geoSlug}/${categorySlug}` }] : []),
+      { "@type": "ListItem", position: 1, name: "Inicio", item: `${base}/` },
+      { "@type": "ListItem", position: 2, name: geoName, item: `${base}/d/${geoSlug}` },
+      ...(catName ? [{ "@type": "ListItem", position: 3, name: catName, item: `${base}/d/${geoSlug}/${categorySlug}` }] : []),
     ],
   };
+
+  // ItemList con los eventos listados (rich result de listados + citabilidad).
+  const itemList = events.length > 0 ? {
+    "@context": "https://schema.org",
+    "@type": "ItemList",
+    name: catName ? `${catName} en ${geoName}` : `Eventos en ${geoName}`,
+    numberOfItems: events.length,
+    itemListElement: events.slice(0, 50).map((e, i) => ({
+      "@type": "ListItem",
+      position: i + 1,
+      url: `${base}/e/${e.slug}`,
+      name: e.title,
+    })),
+  } : null;
+
+  const intro = buildIntro(geoName, catName, categorySlug);
 
   return (
     <main className="relative min-h-screen px-6 pb-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumb) }} />
+      {itemList && <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(itemList) }} />}
 
       <header className="mx-auto max-w-6xl pt-10">
-        <Link href="/" className="mb-8 inline-flex items-center gap-2 font-display text-lg font-bold">
-          <span className="brand-gradient grid h-8 w-8 place-items-center rounded-xl text-ink">
-            <Ticket className="h-4 w-4" strokeWidth={2.5} />
-          </span>
+        <Link href="/" className="mb-8 inline-flex items-center gap-2.5 font-display text-lg font-bold">
+          <img src="/logo-mark.png" alt="ShaarPass" className="h-9 w-9 rounded-xl" />
           ShaarPass
         </Link>
 
@@ -79,6 +115,7 @@ export default async function DiscoveryPage({ params }: { params: Promise<{ part
             ? `${events.length} ${events.length === 1 ? "evento" : "eventos"} próximos · boletos con la comisión más baja del mercado.`
             : "Aún no hay eventos aquí. Vuelve pronto."}
         </p>
+        <p className="mt-4 max-w-3xl text-sm leading-relaxed text-muted">{intro}</p>
 
         {/* Filtros de categoría (enlaces crawleables) */}
         <div className="mt-6 flex flex-wrap gap-2">

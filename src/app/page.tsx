@@ -6,6 +6,7 @@ import { FeeComparator } from "@/components/landing/FeeComparator";
 import { ValueProps } from "@/components/landing/ValueProps";
 import { HowItWorks } from "@/components/landing/HowItWorks";
 import { FAQ } from "@/components/landing/FAQ";
+import { faqs } from "@/components/landing/faq-data";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
 
@@ -29,6 +30,15 @@ const orgJsonLd = {
       name: "ShaarPass",
       inLanguage: "es",
       publisher: { "@id": `${SITE}/#organization` },
+    },
+    {
+      "@type": "FAQPage",
+      "@id": `${SITE}/#faq`,
+      mainEntity: faqs.map((f) => ({
+        "@type": "Question",
+        name: f.q,
+        acceptedAnswer: { "@type": "Answer", text: f.a },
+      })),
     },
   ],
 };
