@@ -3,6 +3,7 @@ import Link from "next/link";
 import { Crown, HandHelping, Wallet, Zap, MessageCircle, BadgeCheck, ArrowRight } from "lucide-react";
 import { Nav } from "@/components/landing/Nav";
 import { Footer } from "@/components/landing/Footer";
+import { LeadForm } from "@/components/marketing/LeadForm";
 
 export const metadata: Metadata = {
   title: "Organizador Fundador — ShaarPass | Te montamos tu primer evento",
@@ -75,15 +76,13 @@ export default function FundadorPage() {
           </div>
         </section>
 
-        <section className="mx-auto mt-16 max-w-2xl text-center">
-          <h2 className="font-display text-3xl font-bold md:text-4xl">¿Tienes un evento en puerta?</h2>
-          <a
-            href="mailto:tickets@shaarpass.io?subject=Quiero%20ser%20Organizador%20Fundador"
-            className="brand-gradient group mt-7 inline-flex items-center gap-2 rounded-full px-8 py-4 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]"
-          >
-            Postular como Fundador <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
-          </a>
-          <p className="mt-4 text-sm text-muted">
+        <section className="mx-auto mt-16 max-w-2xl">
+          <h2 className="text-center font-display text-3xl font-bold md:text-4xl">¿Tienes un evento en puerta?</h2>
+          <p className="mt-3 text-center text-sm text-muted">Déjanos tus datos y te contactamos para montarlo contigo.</p>
+          <div className="mt-7">
+            <LeadForm source="fundador" cta="Postular como Fundador" />
+          </div>
+          <p className="mt-5 text-center text-sm text-muted">
             ¿Prefieres explorar primero? <Link href="/login" className="brand-text font-semibold">Crea tu cuenta</Link>.
           </p>
         </section>
