@@ -13,6 +13,7 @@ import { PresaleControl } from "@/components/dashboard/PresaleControl";
 import { EventCover } from "@/components/dashboard/EventCover";
 import { EventDetailsEditor } from "@/components/dashboard/EventDetailsEditor";
 import { TicketTypesEditor } from "@/components/dashboard/TicketTypesEditor";
+import { EventStats, type DayPoint } from "@/components/dashboard/EventStats";
 
 export const dynamic = "force-dynamic";
 
@@ -83,6 +84,31 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     .from("services").select("id, name, kind, price_cents, inventory, sold, max_per_order")
     .eq("event_id", id).order("created_at").returns<ServiceRow[]>();
 
+  // Analítica del evento (dashboard pro estilo Eventbrite).
+  const { data: paidAgg } = await db.from("orders")
+    .select("subtotal_cents, created_at").eq("event_id", id).eq("status", "paid");
+  const ticketsSold = (types ?? []).reduce((s, t) => s + (t.quantity_sold || 0), 0);
+  const capacity = (types ?? []).reduce((s, t) => s + (t.quantity_total || 0), 0);
+  const netCents = (paidAgg ?? []).reduce((s, o) => s + (o.subtotal_cents || 0), 0);
+  const ordersCount = (paidAgg ?? []).length;
+
+  // Serie diaria: ventana de 14–30 días (desde la primera venta, acotada).
+  const DAY = 86_400_000;
+  const byDay = new Map<string, number>();
+  for (const o of paidAgg ?? []) {
+    const k = new Date(o.created_at).toISOString().slice(0, 10);
+    byDay.set(k, (byDay.get(k) ?? 0) + (o.subtotal_cents || 0));
+  }
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const saleKeys = [...byDay.keys()].sort();
+  const earliest = saleKeys[0] ? new Date(saleKeys[0]).getTime() : today.getTime();
+  const startMs = Math.max(today.getTime() - 29 * DAY, Math.min(earliest, today.getTime() - 13 * DAY));
+  const series: DayPoint[] = [];
+  for (let t = startMs; t <= today.getTime(); t += DAY) {
+    const k = new Date(t).toISOString().slice(0, 10);
+    series.push({ label: k, cents: byDay.get(k) ?? 0 });
+  }
+
   const { data: buyerRows } = await db.from("orders").select("buyer_email").eq("event_id", id).eq("status", "paid");
   const buyersCount = new Set((buyerRows ?? []).map((o) => o.buyer_email)).size;
   const { count: waitlistCount } = await db.from("waitlist").select("id", { count: "exact", head: true }).eq("event_id", id);
@@ -107,6 +133,12 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
             Ver página <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         )}
+      </div>
+
+      {/* Resumen / analítica del evento */}
+      <div className="mb-6">
+        <EventStats currency={event.currency} netCents={netCents} ticketsSold={ticketsSold}
+          capacity={capacity} ordersCount={ordersCount} series={series} />
       </div>
 
       {/* Detalles del evento (editable) */}
