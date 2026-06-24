@@ -10,6 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Descubre eventos cerca de ti | ShaarPass",
   description: "Conciertos, conferencias, talleres y más. Encuentra y compra boletos para los mejores eventos.",
+  alternates: { canonical: "/descubrir" },
 };
 
 export default async function DescubrirPage({ searchParams }: { searchParams: Promise<{ q?: string }> }) {
