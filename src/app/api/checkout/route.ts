@@ -256,6 +256,11 @@ export async function POST(req: Request) {
         });
       }
     } catch { /* best-effort */ }
+    // Automatización de bienvenida (si está activa).
+    try {
+      const { sendWelcome } = await import("@/lib/email/campaignSend");
+      await sendWelcome(db, eventId, { email: buyerEmail, name: buyerName, country: buyerCountry });
+    } catch { /* best-effort */ }
     return NextResponse.json({ free: true, orderId: order.id });
   }
 

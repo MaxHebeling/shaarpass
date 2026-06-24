@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         // Envía los boletos con QR por email.
         const { data: order } = await db
           .from("orders")
-          .select("buyer_email, total_cents, currency, events(title, slug, cover_image, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
+          .select("buyer_email, buyer_name, buyer_country, event_id, total_cents, currency, events(title, slug, cover_image, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
           .eq("id", orderId)
           .single();
         const { data: tks } = await db
@@ -121,6 +121,11 @@ export async function POST(req: Request) {
               typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto",
             })),
           });
+          // Automatización de bienvenida (si está activa).
+          try {
+            const { sendWelcome } = await import("@/lib/email/campaignSend");
+            await sendWelcome(db, order.event_id, { email: order.buyer_email, name: order.buyer_name, country: order.buyer_country });
+          } catch { /* best-effort */ }
         }
       }
       break;

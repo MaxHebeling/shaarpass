@@ -45,8 +45,9 @@ export function AutomationsPanel({ eventId, startsAt, endsAt, enabled }: {
       <div className="space-y-2">
         {AUTOMATIONS.map((a) => {
           const on = !!state[a.key];
-          const computed = automationScheduledAt(a, startsAt, endsAt);
-          const isPast = new Date(computed).getTime() <= Date.now();
+          const isRegister = !!a.onRegister;
+          const computed = isRegister ? null : automationScheduledAt(a, startsAt, endsAt);
+          const isPast = !isRegister && computed !== null && new Date(computed).getTime() <= Date.now();
           const st = state[a.key];
           return (
             <div key={a.key} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/40 px-4 py-3">
@@ -54,9 +55,10 @@ export function AutomationsPanel({ eventId, startsAt, endsAt, enabled }: {
                 <div className="text-sm font-medium">{a.label}</div>
                 <div className="text-xs text-muted">
                   {a.description}
-                  {on && st?.scheduledAt ? <span className="text-gold"> · {st.status === "sent" ? "enviada" : `programada ${fmt(st.scheduledAt)}`}</span>
+                  {isRegister ? <span className={on ? "text-gold" : "text-muted/60"}> · {on ? "activa · se envía al registrarse" : "se envía al registrarse"}</span>
+                    : on && st?.scheduledAt ? <span className="text-gold"> · {st.status === "sent" ? "enviada" : `programada ${fmt(st.scheduledAt)}`}</span>
                     : isPast ? <span className="text-muted/60"> · esa fecha ya pasó</span>
-                    : <span className="text-muted/60"> · se enviaría {fmt(computed)}</span>}
+                    : <span className="text-muted/60"> · se enviaría {computed ? fmt(computed) : ""}</span>}
                 </div>
               </div>
               <button

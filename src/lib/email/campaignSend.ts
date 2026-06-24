@@ -107,6 +107,34 @@ export function renderCampaignHtml(opts: { subject: string; preheader?: string; 
   </div>`;
 }
 
+/** Envía la bienvenida (si está activa) a un registrante recién confirmado. Best-effort. */
+export async function sendWelcome(db: SupabaseClient, eventId: string, buyer: { email: string; name: string | null; country: string | null; ticketType?: string | null }): Promise<void> {
+  try {
+    const { data: camp } = await db.from("campaigns")
+      .select("id, subject, preheader, body_html, from_name, reply_to")
+      .eq("event_id", eventId).eq("automation_key", "welcome").eq("status", "active").maybeSingle();
+    if (!camp) return;
+    const key = process.env.RESEND_API_KEY;
+    if (!key || key.includes("REEMPLAZA")) return;
+    const { data: ev } = await db.from("events").select("title, starts_at, timezone").eq("id", eventId).maybeSingle();
+    const eventName = ev?.title ?? "";
+    const eventDate = ev?.starts_at ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev?.timezone ?? "America/Mexico_City" }) : "";
+    const [firstName, ...rest] = (buyer.name ?? "").trim().split(/\s+/);
+    const r: Recipient = { email: buyer.email, firstName: firstName ?? "", lastName: rest.join(" "), country: buyer.country ?? "", ticketType: buyer.ticketType ?? "", ticketTypeIds: [], status: "paid", checkedIn: false };
+    const ctx = { name: eventName, date: eventDate };
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
+    const fromEnv = process.env.EMAIL_FROM ?? "ShaarPass <onboarding@resend.dev>";
+    const addr = fromEnv.match(/<(.+)>/)?.[1] ?? fromEnv;
+    const from = camp.from_name ? `${camp.from_name} <${addr}>` : fromEnv;
+    const unsub = `${base}/unsubscribe?e=${encodeURIComponent(buyer.email)}&s=${unsubSig(buyer.email)}`;
+    const resend = new Resend(key);
+    const subject = fillVars(camp.subject, r, ctx);
+    const html = renderCampaignHtml({ subject, preheader: fillVars(camp.preheader ?? "", r, ctx), bodyHtml: fillVars(camp.body_html ?? "", r, ctx), unsubUrl: unsub });
+    const { data } = await resend.emails.send({ from, to: buyer.email, subject, html, replyTo: camp.reply_to || undefined, headers: { "List-Unsubscribe": `<${unsub}>` }, tags: [{ name: "campaign_id", value: camp.id }] });
+    await db.from("campaign_emails").upsert({ campaign_id: camp.id, email: buyer.email, country: buyer.country ?? null, ticket_type: buyer.ticketType ?? null, resend_id: data?.id ?? null }, { onConflict: "campaign_id,email" });
+  } catch (e) { console.error("[welcome] ", (e as Error).message); }
+}
+
 /** Envía un correo de PRUEBA con variables de ejemplo. */
 export async function sendTest(opts: {
   to: string; subject: string; preheader?: string; bodyHtml: string; fromName?: string; replyTo?: string;

@@ -617,13 +617,19 @@ export async function toggleAutomation(form: { eventId: string; key: string; ena
   if (!def) return { error: "Automatización desconocida" };
   const { data: ev } = await db.from("events").select("starts_at, ends_at").eq("id", form.eventId).maybeSingle();
   if (!ev) return { error: "Evento no encontrado" };
-  const scheduledAt = automationScheduledAt(def, ev.starts_at, ev.ends_at);
-  if (new Date(scheduledAt).getTime() <= Date.now()) return { error: "Esa fecha ya pasó para este evento" };
+
+  // Bienvenida: disparada al registrarse (sin fecha; status 'active').
+  const isRegister = !!def.onRegister;
+  let scheduledAt: string | null = null;
+  if (!isRegister) {
+    scheduledAt = automationScheduledAt(def, ev.starts_at, ev.ends_at);
+    if (new Date(scheduledAt).getTime() <= Date.now()) return { error: "Esa fecha ya pasó para este evento" };
+  }
   // Upsert por (event_id, automation_key) — índice único evita duplicados.
   const { error } = await db.from("campaigns").upsert({
     event_id: form.eventId, kind: "automation", automation_key: form.key,
     name: def.label, subject: def.subject, body_html: def.body, segment: { type: "all" },
-    status: "scheduled", scheduled_at: scheduledAt, created_by: user?.id ?? null,
+    status: isRegister ? "active" : "scheduled", scheduled_at: scheduledAt, created_by: user?.id ?? null,
   }, { onConflict: "event_id,automation_key" });
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/eventos/${form.eventId}`);

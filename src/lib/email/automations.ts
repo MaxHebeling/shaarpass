@@ -10,9 +10,15 @@ export interface AutomationDef {
   offsetMs: number;        // negativo = antes; positivo = después
   subject: string;
   body: string;
+  onRegister?: boolean;    // true = disparada al registrarse (no programada por fecha)
 }
 
 export const AUTOMATIONS: AutomationDef[] = [
+  {
+    key: "welcome", label: "Bienvenida", description: "Al registrarse / comprar", base: "start", offsetMs: 0, onRegister: true,
+    subject: "¡Bienvenido a {{eventName}}! 🎉",
+    body: "Hola {{firstName}},\n\n¡Gracias por registrarte en {{eventName}} ({{eventDate}})! Ya tienes tu lugar.\n\nGuarda este correo: te enviaremos recordatorios y tu boleto con código QR. ¡Nos vemos pronto!",
+  },
   {
     key: "reminder_30d", label: "Recordatorio 30 días", description: "30 días antes del evento", base: "start", offsetMs: -30 * DAY,
     subject: "Falta 1 mes para {{eventName}} 🎉",
