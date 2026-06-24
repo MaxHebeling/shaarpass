@@ -11,6 +11,7 @@ import { ServicesManager, type ServiceRow } from "@/components/dashboard/Service
 import { CampaignComposer } from "@/components/dashboard/CampaignComposer";
 import { QueueControl } from "@/components/dashboard/QueueControl";
 import { PresaleControl } from "@/components/dashboard/PresaleControl";
+import { EventCover } from "@/components/dashboard/EventCover";
 
 export const dynamic = "force-dynamic";
 
@@ -20,9 +21,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
+    .select("id, org_id, slug, title, status, currency, starts_at, cover_image, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
     .eq("id", id)
-    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
+    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; status: string; currency: string; starts_at: string; cover_image: string | null; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -105,6 +106,11 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
             Ver página <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         )}
+      </div>
+
+      {/* Imagen de portada */}
+      <div className="mb-6">
+        <EventCover eventId={id} initial={event.cover_image} />
       </div>
 
       {/* Boletos */}

@@ -202,6 +202,15 @@ export async function createService(form: {
   return { ok: true };
 }
 
+export async function setEventCover(eventId: string, coverUrl: string | null) {
+  const db = await createClient();
+  // RLS (event_org_write) garantiza que solo un miembro de la org pueda cambiarla.
+  const { error } = await db.from("events").update({ cover_image: coverUrl }).eq("id", eventId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true };
+}
+
 export async function deleteService(serviceId: string, eventId: string) {
   const db = await createClient();
   await db.from("services").delete().eq("id", serviceId);
