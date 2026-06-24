@@ -15,6 +15,7 @@ import { EventDetailsEditor } from "@/components/dashboard/EventDetailsEditor";
 import { TicketTypesEditor } from "@/components/dashboard/TicketTypesEditor";
 import { EventStats, type DayPoint } from "@/components/dashboard/EventStats";
 import { StaffPanel, type StaffRow } from "@/components/dashboard/StaffPanel";
+import { CheckinAnalytics, type Bucket, type RecentScan } from "@/components/dashboard/CheckinAnalytics";
 
 export const dynamic = "force-dynamic";
 
@@ -114,6 +115,32 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     .select("id, name, gate, role, token, revoked, scans_count, last_active_at")
     .eq("event_id", id).order("created_at").returns<StaffRow[]>();
 
+  // Analítica de Control de Acceso (ingresos por hora / puerta / tipo).
+  const [{ count: checkedInCount }, { count: registeredCount }] = await Promise.all([
+    db.from("tickets").select("id", { count: "exact", head: true }).eq("event_id", id).eq("status", "checked_in"),
+    db.from("tickets").select("id", { count: "exact", head: true }).eq("event_id", id).in("status", ["valid", "checked_in"]),
+  ]);
+  const { data: logs } = await db.from("checkin_log")
+    .select("at, gate, tickets(ticket_types(name), orders(buyer_name))")
+    .eq("event_id", id).order("at", { ascending: false }).limit(500);
+
+  const tz = event.timezone || "America/Mexico_City";
+  const byGate = new Map<string, number>(), byType = new Map<string, number>(), byHour = new Map<number, number>();
+  type LogRow = { at: string; gate: string | null; tickets: { ticket_types: { name: string } | null; orders: { buyer_name: string | null } | null } | null };
+  for (const l of (logs ?? []) as unknown as LogRow[]) {
+    byGate.set(l.gate || "General", (byGate.get(l.gate || "General") ?? 0) + 1);
+    const tname = l.tickets?.ticket_types?.name ?? "Boleto";
+    byType.set(tname, (byType.get(tname) ?? 0) + 1);
+    const d = new Date(l.at); d.setMinutes(0, 0, 0);
+    byHour.set(d.getTime(), (byHour.get(d.getTime()) ?? 0) + 1);
+  }
+  const hourLabel = (ms: number) => new Date(ms).toLocaleTimeString("es-MX", { hour: "numeric", hour12: true, timeZone: tz }).replace(/\s/g, "");
+  const byHourArr: Bucket[] = [...byHour.entries()].sort((a, b) => a[0] - b[0]).slice(-12).map(([ms, c]) => ({ label: hourLabel(ms), count: c }));
+  const toBuckets = (m: Map<string, number>): Bucket[] => [...m.entries()].sort((a, b) => b[1] - a[1]).map(([label, count]) => ({ label, count }));
+  const recent: RecentScan[] = ((logs ?? []) as unknown as LogRow[]).slice(0, 10).map((l) => ({
+    name: l.tickets?.orders?.buyer_name || "Asistente", type: l.tickets?.ticket_types?.name || "Boleto", gate: l.gate, at: l.at,
+  }));
+
   const { data: buyerRows } = await db.from("orders").select("buyer_email").eq("event_id", id).eq("status", "paid");
   const buyersCount = new Set((buyerRows ?? []).map((o) => o.buyer_email)).size;
   const { count: waitlistCount } = await db.from("waitlist").select("id", { count: "exact", head: true }).eq("event_id", id);
@@ -171,6 +198,16 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
       {/* Equipo de Recepción (staff de check-in) */}
       <div className="mb-6">
         <StaffPanel eventId={id} eventTitle={event.title} initial={staffRows ?? []} />
+      </div>
+
+      {/* Control de Acceso (analítica de check-in) */}
+      <div className="mb-6">
+        <CheckinAnalytics
+          registered={registeredCount ?? 0} checkedIn={checkedInCount ?? 0} capacity={capacity}
+          byHour={byHourArr} byGate={toBuckets(byGate)} byType={toBuckets(byType)}
+          staff={(staffRows ?? []).map((s) => ({ name: s.name, gate: s.gate, scans: s.scans_count, lastActive: s.last_active_at, revoked: s.revoked }))}
+          recent={recent}
+        />
       </div>
 
       {/* Órdenes + reembolsos + cancelar evento */}
