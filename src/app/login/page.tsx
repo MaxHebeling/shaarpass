@@ -24,7 +24,10 @@ function LoginInner() {
       if (error) setMsg(error.message);
       else router.push(next);
     } else {
-      const { data, error } = await db.auth.signUp({ email, password });
+      const { data, error } = await db.auth.signUp({
+        email, password,
+        options: { emailRedirectTo: `${window.location.origin}/auth/confirm` },
+      });
       if (error) setMsg(error.message);
       else if (data.session) router.push(next);
       else setMsg("Revisa tu correo para confirmar la cuenta y luego inicia sesión.");
