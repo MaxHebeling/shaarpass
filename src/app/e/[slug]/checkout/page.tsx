@@ -107,6 +107,8 @@ export default function CheckoutPage() {
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.detail || data.error || "No se pudo iniciar el pago");
+      // Evento gratis: ya se emitieron los boletos, sin pago → directo a gracias.
+      if (data.free) { sessionStorage.removeItem(`cart:${slug}`); router.push(`/e/${slug}/gracias`); return; }
       if (!data.clientSecret) throw new Error("Falta configurar Stripe (claves de pago).");
       setClientSecret(data.clientSecret);
     } catch (err) {
@@ -237,10 +239,11 @@ export default function CheckoutPage() {
             className="brand-gradient flex w-full items-center justify-center gap-2 rounded-2xl py-3.5 font-semibold text-ink transition hover:scale-[1.01] disabled:opacity-50"
           >
             {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Lock className="h-4 w-4" />}
-            Continuar al pago seguro
+            {totals.total <= 0 ? "Registrarme gratis" : "Continuar al pago seguro"}
           </button>
           <p className="flex items-center justify-center gap-1.5 text-center text-xs text-muted">
-            <ShieldCheck className="h-3.5 w-3.5 text-gold" /> Boletos reservados 10 min mientras pagas
+            <ShieldCheck className="h-3.5 w-3.5 text-gold" />
+            {totals.total <= 0 ? "Recibirás tus boletos por correo al instante" : "Boletos reservados 10 min mientras pagas"}
           </p>
         </form>
       ) : (

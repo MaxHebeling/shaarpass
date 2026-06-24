@@ -75,9 +75,6 @@ export async function POST(req: Request) {
     if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
   const org = event.organizations as unknown as { stripe_account_id: string | null; payouts_enabled: boolean };
-  if (!org?.stripe_account_id || !org.payouts_enabled) {
-    return NextResponse.json({ error: "organizador sin pagos habilitados" }, { status: 409 });
-  }
 
   // Precios autoritativos desde la BD (nunca confíes en el cliente).
   const ids = items.map((i) => i.ticketTypeId);
@@ -167,6 +164,12 @@ export async function POST(req: Request) {
   // de procesamiento cubierta por el gross-up).
   const fees = computeFees(subtotalCents, ticketCount, event.currency, servicesTotal);
   const orderTotal = fees.totalCents;
+  const isFree = orderTotal <= 0;
+
+  // Los pagos solo se exigen si HAY que cobrar. Los eventos gratis no necesitan Stripe.
+  if (!isFree && (!org?.stripe_account_id || !org.payouts_enabled)) {
+    return NextResponse.json({ error: "organizador sin pagos habilitados" }, { status: 409 });
+  }
 
   // 3) Crea la orden (pending) + items.
   const { data: order, error: orderErr } = await db
@@ -220,6 +223,31 @@ export async function POST(req: Request) {
     await db.rpc("consume_presale_code", { p_event: eventId, p_code: presaleCode });
   }
 
+  // 4a) Evento GRATIS: sin pago. Emite boletos de inmediato y manda el correo.
+  if (isFree) {
+    await db.rpc("confirm_order_paid", { p_order_id: order.id, p_payment_intent_id: null });
+    try {
+      const { sendTicketEmail } = await import("@/lib/email/tickets");
+      const { data: o } = await db.from("orders")
+        .select("buyer_email, total_cents, currency, events(title, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
+        .eq("id", order.id).single();
+      const { data: tks } = await db.from("tickets").select("qr_token, ticket_types(name)").eq("order_id", order.id);
+      if (o && tks?.length) {
+        const ev = o.events as unknown as { title: string; starts_at: string; timezone: string; safetix_enabled: boolean };
+        const og = o.organizations as unknown as { name: string; logo_url: string | null; white_label: boolean } | null;
+        await sendTicketEmail({
+          to: o.buyer_email,
+          eventTitle: ev?.title ?? "Tu evento",
+          eventDate: ev?.starts_at ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev.timezone }) : "",
+          currency: o.currency, totalCents: o.total_cents, safetix: ev?.safetix_enabled,
+          logoUrl: og?.logo_url ?? null, brand: og?.name ?? null, whiteLabel: og?.white_label ?? false,
+          tickets: tks.map((t) => ({ qr_token: t.qr_token, typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto" })),
+        });
+      }
+    } catch { /* best-effort */ }
+    return NextResponse.json({ free: true, orderId: order.id });
+  }
+
   // 4) PaymentIntent con destination charge: el neto va al organizador,
   //    application_fee_amount = nuestra comisión transparente.
   const intent = await getStripe().paymentIntents.create(
@@ -227,7 +255,7 @@ export async function POST(req: Request) {
       amount: orderTotal,
       currency: event.currency,
       application_fee_amount: fees.platformFeeCents,
-      transfer_data: { destination: org.stripe_account_id },
+      transfer_data: { destination: org.stripe_account_id! },
       receipt_email: buyerEmail,
       metadata: { order_id: order.id, event_id: eventId },
     },
