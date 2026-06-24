@@ -25,9 +25,17 @@ export async function GET(req: Request) {
   const { data: bd } = await db.rpc("ticket_brand", { p_token: token });
   const brand = Array.isArray(bd) ? bd[0] : bd;
 
+  // Diseño/datos del evento (imagen oficial + detalles).
+  const { data: ed } = await db.rpc("ticket_event_info", { p_token: token });
+  const ev = Array.isArray(ed) ? ed[0] : ed;
+
   return NextResponse.json({
     payload,
     refreshSeconds: 15,
     brand: brand ? { name: brand.name, logoUrl: brand.logo_url, whiteLabel: brand.white_label } : null,
+    event: ev ? {
+      title: ev.title, slug: ev.slug, startsAt: ev.starts_at, endsAt: ev.ends_at,
+      timezone: ev.timezone, coverImage: ev.cover_image, typeName: ev.type_name,
+    } : null,
   });
 }

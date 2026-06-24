@@ -91,7 +91,7 @@ export async function POST(req: Request) {
         // Envía los boletos con QR por email.
         const { data: order } = await db
           .from("orders")
-          .select("buyer_email, total_cents, currency, events(title, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
+          .select("buyer_email, total_cents, currency, events(title, slug, cover_image, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
           .eq("id", orderId)
           .single();
         const { data: tks } = await db
@@ -100,7 +100,7 @@ export async function POST(req: Request) {
           .eq("order_id", orderId);
 
         if (order && tks?.length) {
-          const ev = order.events as unknown as { title: string; starts_at: string; timezone: string; safetix_enabled: boolean };
+          const ev = order.events as unknown as { title: string; slug: string; cover_image: string | null; starts_at: string; timezone: string; safetix_enabled: boolean };
           const org = order.organizations as unknown as { name: string; logo_url: string | null; white_label: boolean } | null;
           await sendTicketEmail({
             to: order.buyer_email,
@@ -108,6 +108,8 @@ export async function POST(req: Request) {
             eventDate: ev?.starts_at
               ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev.timezone })
               : "",
+            coverImage: ev?.cover_image ?? null,
+            eventSlug: ev?.slug ?? null,
             currency: order.currency,
             totalCents: order.total_cents,
             safetix: ev?.safetix_enabled,

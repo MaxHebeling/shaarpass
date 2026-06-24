@@ -14,6 +14,9 @@ export interface SendTicketsParams {
   totalCents: number;
   tickets: EmailTicket[];
   safetix?: boolean;
+  // Diseño del evento.
+  coverImage?: string | null;
+  eventSlug?: string | null;
   // Marca del organizador (white-label).
   logoUrl?: string | null;
   brand?: string | null;
@@ -51,6 +54,17 @@ export async function sendTicketEmail(p: SendTicketsParams): Promise<{ sent: boo
   const logoHtml = p.logoUrl
     ? `<img src="${p.logoUrl}" alt="${p.brand ?? ""}" style="max-height:48px;max-width:180px;margin:0 0 16px;display:block" />`
     : "";
+
+  // Diseño oficial del evento (imagen responsiva) + enlace para verlo en grande.
+  const eventUrl = p.eventSlug ? `${base}/e/${p.eventSlug}` : null;
+  const coverHtml = p.coverImage
+    ? `<a href="${eventUrl ?? "#"}" style="text-decoration:none">
+         <img src="${p.coverImage}" alt="${p.eventTitle}" width="100%" style="width:100%;max-width:456px;height:auto;border-radius:16px;display:block;margin:0 0 18px" />
+       </a>`
+    : "";
+  const seeDesignHtml = eventUrl
+    ? `<a href="${eventUrl}" style="display:inline-block;margin:4px 0 20px;color:#f5c451;font-weight:600;font-size:14px;text-decoration:none">🎨 Ver diseño del evento →</a>`
+    : "";
   const footer = p.whiteLabel
     ? (p.brand ? `Enviado por ${p.brand}.` : "")
     : "Enviado por ShaarPass — te quedas con más de cada boleto.";
@@ -58,8 +72,10 @@ export async function sendTicketEmail(p: SendTicketsParams): Promise<{ sent: boo
   const html = `
   <div style="max-width:520px;margin:0 auto;font-family:system-ui,sans-serif;background:#08080c;color:#f4f4f7;padding:32px;border-radius:24px">
     ${logoHtml}
+    ${coverHtml}
     <h1 style="font-size:24px;margin:0 0 4px">🎟️ Tus boletos</h1>
-    <p style="color:#9a9ab0;margin:0 0 20px">${p.eventTitle} · ${p.eventDate}</p>
+    <p style="color:#9a9ab0;margin:0 0 12px">${p.eventTitle} · ${p.eventDate}</p>
+    ${seeDesignHtml}
     ${ticketsHtml}
     <p style="color:#9a9ab0;font-size:13px;margin-top:20px">
       Total pagado: <strong style="color:#f5c451">${money(p.totalCents, p.currency)}</strong><br/>

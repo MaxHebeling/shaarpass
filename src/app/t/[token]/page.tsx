@@ -2,8 +2,16 @@
 
 import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
-import { ShieldCheck, Loader2, RefreshCw, Send, Tag } from "lucide-react";
+import { ShieldCheck, Loader2, RefreshCw, Send, Tag, Image as ImageIcon, Calendar, Share2 } from "lucide-react";
 import { SellerPayoutButton } from "@/components/resale/SellerPayoutButton";
+
+interface TicketEvent { title: string; slug: string; startsAt: string; endsAt: string; timezone: string; coverImage: string | null; typeName: string | null; }
+
+function fmtWhen(iso: string, tz: string) {
+  try {
+    return new Date(iso).toLocaleString("es-MX", { weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: tz || "America/Mexico_City" });
+  } catch { return ""; }
+}
 
 export default function MobileTicketPage() {
   const { token } = useParams<{ token: string }>();
@@ -11,6 +19,7 @@ export default function MobileTicketPage() {
   const [secsLeft, setSecsLeft] = useState(15);
   const [error, setError] = useState(false);
   const [brand, setBrand] = useState<{ name: string; logoUrl: string | null; whiteLabel: boolean } | null>(null);
+  const [ev, setEv] = useState<TicketEvent | null>(null);
   // Gestión: transferir / revender
   const [open, setOpen] = useState<"none" | "transfer" | "resale">("none");
   const [toEmail, setToEmail] = useState("");
@@ -42,8 +51,19 @@ export default function MobileTicketPage() {
       if (!res.ok || !data.payload) { setError(true); return; }
       setPayload(data.payload);
       if (data.brand) setBrand(data.brand);
+      if (data.event) setEv(data.event);
       setSecsLeft(15);
     } catch { setError(true); }
+  }
+
+  function shareTicket() {
+    const url = typeof window !== "undefined" ? window.location.href : "";
+    const text = `🎟️ Mi boleto para ${ev?.title ?? "el evento"}: ${url}`;
+    if (typeof navigator !== "undefined" && navigator.share) {
+      navigator.share({ title: ev?.title ?? "Mi boleto", text, url }).catch(() => {});
+    } else {
+      window.open(`https://wa.me/?text=${encodeURIComponent(text)}`, "_blank");
+    }
   }
 
   useEffect(() => { refresh(); const id = setInterval(refresh, 15000); return () => clearInterval(id); }, [token]);
@@ -62,6 +82,29 @@ export default function MobileTicketPage() {
           )}
         </div>
         <p className="mb-5 text-xs text-muted">Tu boleto · preséntalo en la entrada</p>
+
+        {/* Diseño oficial del evento */}
+        {ev && (
+          <div className="mb-5 overflow-hidden rounded-2xl border border-line text-left">
+            {ev.coverImage ? (
+              <a href={`/e/${ev.slug}`} className="block">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img src={ev.coverImage} alt={ev.title} className="aspect-[16/9] w-full object-cover" />
+              </a>
+            ) : null}
+            <div className="p-3.5">
+              <div className="font-display text-base font-semibold leading-tight">{ev.title}</div>
+              <div className="mt-1 flex items-center gap-1.5 text-xs text-muted">
+                <Calendar className="h-3.5 w-3.5 shrink-0" />
+                <span className="capitalize">{fmtWhen(ev.startsAt, ev.timezone)}</span>
+                {ev.typeName ? <span className="text-muted/70">· {ev.typeName}</span> : null}
+              </div>
+              <a href={`/e/${ev.slug}`} className="mt-2.5 inline-flex items-center gap-1.5 text-xs font-semibold text-gold transition hover:opacity-80">
+                <ImageIcon className="h-3.5 w-3.5" /> Ver diseño del evento
+              </a>
+            </div>
+          </div>
+        )}
 
         {error ? (
           <p className="py-16 text-sm text-fuchsia">Boleto no encontrado.</p>
@@ -82,6 +125,13 @@ export default function MobileTicketPage() {
         <p className="mt-5 flex items-center justify-center gap-1.5 text-xs text-muted">
           <ShieldCheck className="h-3.5 w-3.5 text-gold" /> Código seguro que rota cada 15s · una captura no sirve
         </p>
+
+        {payload && (
+          <button onClick={shareTicket}
+            className="mt-4 flex w-full items-center justify-center gap-2 rounded-2xl border border-line py-3 text-sm font-medium transition hover:border-white/20">
+            <Share2 className="h-4 w-4" /> Enviar boleto por WhatsApp
+          </button>
+        )}
 
         {/* Gestión del boleto */}
         {transferred ? (

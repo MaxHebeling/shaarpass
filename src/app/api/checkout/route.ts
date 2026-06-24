@@ -239,16 +239,17 @@ export async function POST(req: Request) {
     try {
       const { sendTicketEmail } = await import("@/lib/email/tickets");
       const { data: o } = await db.from("orders")
-        .select("buyer_email, total_cents, currency, events(title, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
+        .select("buyer_email, total_cents, currency, events(title, slug, cover_image, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
         .eq("id", order.id).single();
       const { data: tks } = await db.from("tickets").select("qr_token, ticket_types(name)").eq("order_id", order.id);
       if (o && tks?.length) {
-        const ev = o.events as unknown as { title: string; starts_at: string; timezone: string; safetix_enabled: boolean };
+        const ev = o.events as unknown as { title: string; slug: string; cover_image: string | null; starts_at: string; timezone: string; safetix_enabled: boolean };
         const og = o.organizations as unknown as { name: string; logo_url: string | null; white_label: boolean } | null;
         await sendTicketEmail({
           to: o.buyer_email,
           eventTitle: ev?.title ?? "Tu evento",
           eventDate: ev?.starts_at ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev.timezone }) : "",
+          coverImage: ev?.cover_image ?? null, eventSlug: ev?.slug ?? null,
           currency: o.currency, totalCents: o.total_cents, safetix: ev?.safetix_enabled,
           logoUrl: og?.logo_url ?? null, brand: og?.name ?? null, whiteLabel: og?.white_label ?? false,
           tickets: tks.map((t) => ({ qr_token: t.qr_token, typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto" })),
