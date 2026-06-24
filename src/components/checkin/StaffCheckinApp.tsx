@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CheckCircle2, XCircle, AlertTriangle, Camera, Search, DoorOpen, Calendar, MapPin, UserCheck, Loader2, Download } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Camera, Search, DoorOpen, Calendar, MapPin, UserCheck, Loader2, Download, Wifi, WifiOff, RefreshCw } from "lucide-react";
 
 interface BIPEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }>; }
 
@@ -25,7 +25,8 @@ function InstallButton() {
 }
 
 interface EventInfo { title: string; coverImage: string | null; startsAt: string; timezone: string; city: string | null; region: string | null; isOnline: boolean; }
-interface ScanResult { result: "ok" | "already" | "invalid"; message: string; attendee?: string | null; type?: string | null; at?: string | null; gate?: string | null; }
+interface ScanResult { result: "ok" | "already" | "invalid" | "pending"; message: string; attendee?: string | null; type?: string | null; at?: string | null; gate?: string | null; }
+interface QueuedScan { token: string; manual: boolean; at: string; }
 interface Stats { registered: number; checkedIn: number; pending: number; total: number; }
 interface SearchHit { qrToken: string; name: string; type: string; status: string; }
 
@@ -38,8 +39,19 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
   const [q, setQ] = useState("");
   const [hits, setHits] = useState<SearchHit[]>([]);
   const [searching, setSearching] = useState(false);
+  const [online, setOnline] = useState(true);
+  const [pendingN, setPendingN] = useState(0);
+  const [syncing, setSyncing] = useState(false);
   const lastRef = useRef<{ token: string; at: number }>({ token: "", at: 0 });
   const busyRef = useRef(false);
+  const queueRef = useRef<QueuedScan[]>([]);
+  const syncingRef = useRef(false);
+  const queueKey = `shaarpass:checkin-queue:${token}`;
+
+  const persistQueue = useCallback(() => {
+    try { localStorage.setItem(queueKey, JSON.stringify(queueRef.current)); } catch { /* noop */ }
+    setPendingN(queueRef.current.length);
+  }, [queueKey]);
 
   const fmtWhen = (() => { try { return new Date(event.startsAt).toLocaleString("es-MX", { weekday: "short", day: "numeric", month: "long", hour: "2-digit", minute: "2-digit", timeZone: event.timezone || "America/Mexico_City" }); } catch { return ""; } })();
   const location = event.isOnline ? "Evento virtual" : [event.city, event.region].filter(Boolean).join(", ") || "Ubicación por confirmar";
@@ -54,6 +66,35 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
   // Recuerda este escáner para que la PWA instalada reabra aquí.
   useEffect(() => { try { localStorage.setItem("shaarpass:checkin-token", token); } catch { /* noop */ } }, [token]);
 
+  // Guarda un escaneo en la cola local (sin conexión) y avisa visualmente.
+  const enqueue = useCallback((qrToken: string, manual: boolean) => {
+    queueRef.current = [...queueRef.current, { token: qrToken, manual, at: new Date().toISOString() }];
+    persistQueue();
+    setResult({ result: "pending", message: "Guardado sin conexión" });
+    if (navigator.vibrate) navigator.vibrate(60);
+    setTimeout(() => setResult(null), 1800);
+  }, [persistQueue]);
+
+  // Sincroniza la cola con el servidor (autoridad para resolver conflictos).
+  const sync = useCallback(async () => {
+    if (syncingRef.current || typeof navigator === "undefined" || !navigator.onLine || queueRef.current.length === 0) return;
+    syncingRef.current = true; setSyncing(true);
+    const queue = [...queueRef.current];
+    for (const item of queue) {
+      try {
+        const res = await fetch("/api/checkin/staff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staffToken: token, token: item.token, manual: item.manual }) });
+        const data: ScanResult = await res.json();
+        queueRef.current = queueRef.current.filter((x) => x !== item); // servidor respondió → fuera de la cola
+        persistQueue();
+        setLog((l) => [{ name: (data.attendee || data.type || "Boleto") + " (offline)", ok: data.result === "ok", t: new Date(item.at).toLocaleTimeString("es-MX") }, ...l].slice(0, 10));
+      } catch {
+        break; // se cayó la red otra vez → conserva el resto y reintenta luego
+      }
+    }
+    syncingRef.current = false; setSyncing(false);
+    loadStats();
+  }, [token, persistQueue, loadStats]);
+
   const submit = useCallback(async (qrToken: string, manual = false) => {
     if (busyRef.current) return;
     const now = Date.now();
@@ -61,6 +102,7 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
     lastRef.current = { token: qrToken, at: now };
     busyRef.current = true;
     try {
+      if (typeof navigator !== "undefined" && navigator.onLine === false) { enqueue(qrToken, manual); return; }
       const res = await fetch("/api/checkin/staff", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ staffToken: token, token: qrToken, manual }) });
       const data: ScanResult = await res.json();
       setResult(data);
@@ -69,12 +111,24 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
       if (navigator.vibrate) navigator.vibrate(data.result === "ok" ? 80 : [40, 40, 40]);
       setTimeout(() => setResult(null), 2600);
     } catch {
-      setResult({ result: "invalid", message: "Sin conexión — reintenta" });
-      setTimeout(() => setResult(null), 2000);
+      enqueue(qrToken, manual); // sin red → a la cola, no se pierde el acceso
     } finally {
       setTimeout(() => { busyRef.current = false; }, 500);
     }
-  }, [token, loadStats]);
+  }, [token, loadStats, enqueue]);
+
+  // Estado de conexión + carga de cola + autosync.
+  useEffect(() => {
+    try { const raw = localStorage.getItem(queueKey); if (raw) { queueRef.current = JSON.parse(raw); setPendingN(queueRef.current.length); } } catch { /* noop */ }
+    setOnline(navigator.onLine);
+    const goOnline = () => { setOnline(true); sync(); };
+    const goOffline = () => setOnline(false);
+    window.addEventListener("online", goOnline);
+    window.addEventListener("offline", goOffline);
+    const id = setInterval(() => { if (navigator.onLine && queueRef.current.length) sync(); }, 8000);
+    if (navigator.onLine) sync();
+    return () => { window.removeEventListener("online", goOnline); window.removeEventListener("offline", goOffline); clearInterval(id); };
+  }, [queueKey, sync]);
 
   // Escáner QR (html5-qrcode), solo en pestaña de escaneo.
   useEffect(() => {
@@ -108,6 +162,7 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
     ok: { bg: "bg-emerald-500", Icon: CheckCircle2 },
     already: { bg: "bg-amber-500", Icon: AlertTriangle },
     invalid: { bg: "bg-rose-600", Icon: XCircle },
+    pending: { bg: "bg-indigo-600", Icon: WifiOff },
   } as const;
 
   return (
@@ -141,8 +196,21 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
         <StatCard label="Pendientes" value={stats?.pending} tone="gold" />
       </div>
 
+      {/* Estado de conexión / sincronización */}
+      <div className={`mt-3 flex items-center justify-center gap-2 rounded-xl px-3 py-2 text-xs font-medium ${online ? "bg-emerald-500/10 text-emerald-300" : "bg-indigo-500/15 text-indigo-300"}`}>
+        {syncing ? (
+          <><RefreshCw className="h-3.5 w-3.5 animate-spin" /> Sincronizando {pendingN} pendiente{pendingN === 1 ? "" : "s"}…</>
+        ) : online ? (
+          pendingN > 0
+            ? <><Wifi className="h-3.5 w-3.5" /> En línea · {pendingN} por sincronizar <button onClick={sync} className="underline">sincronizar</button></>
+            : <><Wifi className="h-3.5 w-3.5" /> En línea · sincronizado</>
+        ) : (
+          <><WifiOff className="h-3.5 w-3.5" /> Sin conexión · {pendingN} guardado{pendingN === 1 ? "" : "s"} localmente</>
+        )}
+      </div>
+
       {/* Pestañas */}
-      <div className="mt-4 grid grid-cols-2 gap-2">
+      <div className="mt-3 grid grid-cols-2 gap-2">
         <button onClick={() => setTab("scan")} className={`flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition ${tab === "scan" ? "brand-gradient text-ink" : "glass text-muted"}`}><Camera className="h-4 w-4" /> Escanear QR</button>
         <button onClick={() => setTab("search")} className={`flex items-center justify-center gap-2 rounded-2xl py-3 text-sm font-semibold transition ${tab === "search" ? "brand-gradient text-ink" : "glass text-muted"}`}><Search className="h-4 w-4" /> Buscar</button>
       </div>

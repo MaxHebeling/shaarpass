@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import type { ReactNode } from "react";
+import { RegisterSW } from "@/components/checkin/RegisterSW";
 
 // Manifest e identidad propios → instalable como "ShaarPass Check-In".
 export const metadata: Metadata = {
@@ -24,5 +25,5 @@ export const viewport: Viewport = {
 };
 
 export default function CheckinLayout({ children }: { children: ReactNode }) {
-  return children;
+  return <><RegisterSW />{children}</>;
 }
