@@ -8,7 +8,7 @@ import { OrdersPanel, type OrderRow } from "@/components/dashboard/OrdersPanel";
 import { SeatBuilder, type TierOption } from "@/components/dashboard/SeatBuilder";
 import { EventVenueMap, type PublishedMap, type ZonePrice } from "@/components/dashboard/EventVenueMap";
 import { ServicesManager, type ServiceRow } from "@/components/dashboard/ServicesManager";
-import { CampaignComposer } from "@/components/dashboard/CampaignComposer";
+import { CampaignsPanel, type CampaignRow } from "@/components/dashboard/CampaignsPanel";
 import { QueueControl } from "@/components/dashboard/QueueControl";
 import { PresaleControl } from "@/components/dashboard/PresaleControl";
 import { EventCover } from "@/components/dashboard/EventCover";
@@ -143,9 +143,16 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     name: l.tickets?.orders?.buyer_name || "Asistente", type: l.tickets?.ticket_types?.name || "Boleto", gate: l.gate, at: l.at,
   }));
 
-  const { data: buyerRows } = await db.from("orders").select("buyer_email").eq("event_id", id).eq("status", "paid");
-  const buyersCount = new Set((buyerRows ?? []).map((o) => o.buyer_email)).size;
-  const { count: waitlistCount } = await db.from("waitlist").select("id", { count: "exact", head: true }).eq("event_id", id);
+  // Campañas + datos para segmentación.
+  const { data: campaignRows } = await db.from("campaigns")
+    .select("id, name, subject, status, scheduled_at, recipients_count, sent_count, created_at")
+    .eq("event_id", id).order("created_at", { ascending: false }).returns<CampaignRow[]>();
+  const { data: regRows } = await db.from("orders").select("buyer_email, buyer_name, buyer_country").eq("event_id", id).eq("status", "paid");
+  const countryOptions = [...new Set((regRows ?? []).map((r) => r.buyer_country).filter(Boolean) as string[])];
+  const regMap = new Map<string, { email: string; name: string }>();
+  for (const r of regRows ?? []) { const e = (r.buyer_email ?? "").toLowerCase(); if (e && !regMap.has(e)) regMap.set(e, { email: e, name: r.buyer_name ?? e }); }
+  const registrants = [...regMap.values()].slice(0, 500);
+
   const { count: presaleReg } = await db.from("presale_registrations").select("id", { count: "exact", head: true }).eq("event_id", id);
   const { count: presaleSel } = await db.from("presale_registrations").select("id", { count: "exact", head: true }).eq("event_id", id).eq("selected", true);
 
@@ -247,7 +254,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
           },
           {
             id: "marketing", label: "Marketing", icon: <Megaphone className="h-4 w-4" />,
-            content: <CampaignComposer eventId={id} buyers={buyersCount} waitlistCount={waitlistCount ?? 0} />,
+            content: <CampaignsPanel eventId={id} defaultTz={event.timezone} ticketTypes={(types ?? []).map((t) => ({ id: t.id, name: t.name }))} countries={countryOptions} registrants={registrants} initial={campaignRows ?? []} />,
           },
         ]}
       />

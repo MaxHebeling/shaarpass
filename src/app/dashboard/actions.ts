@@ -5,6 +5,7 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { countRecipients, processNotificationJob, type FieldChange, type ChangePayload } from "@/lib/notifications/eventChange";
+import type { Segment } from "@/lib/email/campaignSend";
 
 function slugify(s: string) {
   return s
@@ -523,6 +524,72 @@ export async function addCheckinStaff(form: { eventId: string; name: string; gat
 export async function revokeCheckinStaff(form: { staffId: string; eventId: string; revoked: boolean }) {
   const db = await createClient();
   const { error } = await db.from("event_staff").update({ revoked: form.revoked }).eq("id", form.staffId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+// --- Campañas de email (constructor + segmentación + programación) ---
+
+export interface CampaignForm {
+  id?: string; eventId: string; name: string; subject: string; preheader?: string;
+  fromName?: string; replyTo?: string; bodyHtml: string; segment: Segment;
+}
+
+async function upsertCampaign(form: CampaignForm): Promise<{ id?: string; error?: string }> {
+  const db = await createClient();
+  if (!form.name.trim() || !form.subject.trim()) return { error: "Nombre y asunto son obligatorios" };
+  const { data: { user } } = await db.auth.getUser();
+  const row = {
+    event_id: form.eventId, name: form.name.trim(), subject: form.subject.trim(),
+    preheader: form.preheader?.trim() || null, from_name: form.fromName?.trim() || null,
+    reply_to: form.replyTo?.trim() || null, body_html: form.bodyHtml, segment: form.segment,
+  };
+  if (form.id) {
+    const { error } = await db.from("campaigns").update(row).eq("id", form.id);
+    if (error) return { error: error.message };
+    return { id: form.id };
+  }
+  const { data, error } = await db.from("campaigns").insert({ ...row, created_by: user?.id ?? null }).select("id").single();
+  if (error) return { error: error.message };
+  return { id: data.id };
+}
+
+/** Guarda + envía YA. */
+export async function sendCampaign2(form: CampaignForm) {
+  const saved = await upsertCampaign(form);
+  if (saved.error || !saved.id) return { error: saved.error ?? "No se pudo guardar" };
+  const { sendCampaignNow } = await import("@/lib/email/campaignSend");
+  const admin = createAdminClient();
+  const res = await sendCampaignNow(admin, saved.id);
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true, ...res };
+}
+
+/** Guarda + programa para una fecha/hora (ISO en UTC). */
+export async function scheduleCampaign(form: CampaignForm & { scheduledAt: string; timezone: string }) {
+  const saved = await upsertCampaign(form);
+  if (saved.error || !saved.id) return { error: saved.error ?? "No se pudo guardar" };
+  const db = await createClient();
+  const { error } = await db.from("campaigns").update({ status: "scheduled", scheduled_at: form.scheduledAt, timezone: form.timezone }).eq("id", saved.id);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true, id: saved.id };
+}
+
+export async function sendTestCampaign(form: { eventId: string; to: string; subject: string; preheader?: string; bodyHtml: string; fromName?: string; replyTo?: string }) {
+  const db = await createClient();
+  const { data: ev } = await db.from("events").select("title, starts_at, timezone").eq("id", form.eventId).maybeSingle();
+  const { sendTest } = await import("@/lib/email/campaignSend");
+  const eventDate = ev?.starts_at ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev?.timezone ?? "America/Mexico_City" }) : "";
+  const res = await sendTest({ to: form.to, subject: form.subject, preheader: form.preheader, bodyHtml: form.bodyHtml, fromName: form.fromName, replyTo: form.replyTo, eventName: ev?.title ?? "", eventDate });
+  if (!res.sent) return { error: res.reason === "no_key" ? "Falta configurar Resend." : (res.reason ?? "No se pudo enviar la prueba") };
+  return { ok: true };
+}
+
+export async function deleteCampaign(form: { id: string; eventId: string }) {
+  const db = await createClient();
+  const { error } = await db.from("campaigns").delete().eq("id", form.id);
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/eventos/${form.eventId}`);
   return { ok: true };
