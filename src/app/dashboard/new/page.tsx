@@ -4,25 +4,10 @@ import { useState, useTransition } from "react";
 import { Plus, Trash2, Loader2 } from "lucide-react";
 import { createEvent, type TicketTypeInput } from "../actions";
 import { CURRENCIES } from "@/lib/currencies";
+import { wallTimeToISO, EVENT_TIMEZONES } from "@/lib/datetime";
 
 const field = "w-full rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-sm outline-none transition focus:border-fuchsia/60";
 const label = "mb-1.5 block text-xs text-muted";
-
-/** Convierte una hora de pared (fecha+hora) en la zona del evento a UTC ISO,
- *  sin importar la zona del navegador de quien crea el evento. */
-function wallTimeToISO(dateStr: string, timeStr: string, tz: string): string {
-  const naiveUTC = Date.parse(`${dateStr}T${timeStr}:00Z`); // la hora de pared como si fuera UTC
-  const d = new Date(naiveUTC);
-  const dtf = new Intl.DateTimeFormat("en-US", {
-    timeZone: tz, hourCycle: "h23",
-    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
-  });
-  const m: Record<string, string> = {};
-  for (const p of dtf.formatToParts(d)) m[p.type] = p.value;
-  const asUTC = Date.UTC(+m.year, +m.month - 1, +m.day, +m.hour, +m.minute, +m.second);
-  const offset = asUTC - d.getTime(); // cuánto difiere la zona del evento respecto a UTC
-  return new Date(naiveUTC - offset).toISOString();
-}
 
 export default function NewEventPage() {
   const [tickets, setTickets] = useState<TicketTypeInput[]>([{ name: "General", price: 250, quantity: 100 }]);
@@ -127,18 +112,7 @@ export default function NewEventPage() {
           <div>
             <label className={label}>Zona horaria del evento</label>
             <select name="timezone" defaultValue="America/Mexico_City" className={field}>
-              <option value="America/Mexico_City">México (CDMX / centro)</option>
-              <option value="America/Tijuana">Tijuana / Baja California</option>
-              <option value="America/Monterrey">Monterrey</option>
-              <option value="America/Cancun">Cancún / Quintana Roo</option>
-              <option value="America/Argentina/Buenos_Aires">Argentina</option>
-              <option value="America/Bogota">Colombia</option>
-              <option value="America/Lima">Perú</option>
-              <option value="America/Santiago">Chile</option>
-              <option value="America/Guatemala">Guatemala / Centroamérica</option>
-              <option value="America/Los_Angeles">EE.UU. — Pacífico (San Diego)</option>
-              <option value="America/New_York">EE.UU. — Este</option>
-              <option value="Europe/Madrid">España</option>
+              {EVENT_TIMEZONES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
             </select>
           </div>
         </Section>

@@ -2,7 +2,6 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { money } from "@/lib/money";
 import { PromoManager, type PromoRow } from "@/components/dashboard/PromoManager";
 import { OrdersPanel, type OrderRow } from "@/components/dashboard/OrdersPanel";
 import { SeatBuilder, type TierOption } from "@/components/dashboard/SeatBuilder";
@@ -12,6 +11,8 @@ import { CampaignComposer } from "@/components/dashboard/CampaignComposer";
 import { QueueControl } from "@/components/dashboard/QueueControl";
 import { PresaleControl } from "@/components/dashboard/PresaleControl";
 import { EventCover } from "@/components/dashboard/EventCover";
+import { EventDetailsEditor } from "@/components/dashboard/EventDetailsEditor";
+import { TicketTypesEditor } from "@/components/dashboard/TicketTypesEditor";
 
 export const dynamic = "force-dynamic";
 
@@ -21,9 +22,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, slug, title, status, currency, starts_at, cover_image, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
+    .select("id, org_id, slug, title, description, category, status, currency, starts_at, ends_at, timezone, city, region, cover_image, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
     .eq("id", id)
-    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; status: string; currency: string; starts_at: string; cover_image: string | null; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
+    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; description: string | null; category: string | null; status: string; currency: string; starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; cover_image: string | null; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -108,25 +109,25 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
         )}
       </div>
 
+      {/* Detalles del evento (editable) */}
+      <div className="mb-6">
+        <EventDetailsEditor e={{
+          id: event.id, title: event.title, description: event.description, category: event.category,
+          city: event.city, region: event.region, startsAt: event.starts_at, endsAt: event.ends_at,
+          timezone: event.timezone, currency: event.currency,
+        }} />
+      </div>
+
       {/* Imagen de portada */}
       <div className="mb-6">
         <EventCover eventId={id} initial={event.cover_image} />
       </div>
 
-      {/* Boletos */}
-      <div className="glass mb-6 rounded-3xl p-6">
-        <h2 className="mb-4 font-display text-lg font-semibold">Boletos</h2>
-        <div className="space-y-2">
-          {(types ?? []).map((t, i) => (
-            <div key={i} className="flex items-center justify-between rounded-2xl border border-line bg-surface/40 px-4 py-3 text-sm">
-              <span className="font-medium">{t.name}</span>
-              <span className="flex items-center gap-4 text-muted">
-                <span className="text-gold">{money(t.price_cents, event.currency)}</span>
-                <span>{t.quantity_sold}/{t.quantity_total} vendidos</span>
-              </span>
-            </div>
-          ))}
-        </div>
+      {/* Boletos (editable) */}
+      <div className="mb-6">
+        <TicketTypesEditor eventId={id} currency={event.currency} initial={(types ?? []).map((t) => ({
+          id: t.id, name: t.name, price_cents: t.price_cents, quantity_total: t.quantity_total, quantity_sold: t.quantity_sold,
+        }))} />
       </div>
 
       {/* Órdenes + reembolsos + cancelar evento */}

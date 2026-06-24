@@ -202,6 +202,67 @@ export async function createService(form: {
   return { ok: true };
 }
 
+export async function updateEventDetails(form: {
+  eventId: string; title: string; description: string; category: string;
+  venueName: string; city: string; region: string;
+  startsAt: string; endsAt: string; timezone: string; currency: string;
+}) {
+  const db = await createClient();
+  if (!form.title.trim()) return { error: "El título es obligatorio" };
+  // RLS event_org_write garantiza que solo un miembro de la org pueda editarlo.
+  const { error } = await db.from("events").update({
+    title: form.title.trim(),
+    description: form.description?.trim() || null,
+    category: form.category?.trim() || null,
+    city: form.city?.trim() || null,
+    region: form.region?.trim() || null,
+    starts_at: form.startsAt,
+    ends_at: form.endsAt,
+    timezone: form.timezone,
+    currency: form.currency.toLowerCase(),
+  }).eq("id", form.eventId);
+  if (error) return { error: error.message };
+  // Venue (texto simple en la tabla venues legacy si existe el nombre).
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function updateTicketType(form: {
+  id: string; eventId: string; name: string; price: number; quantity: number;
+}) {
+  const db = await createClient();
+  if (!form.name.trim()) return { error: "Nombre requerido" };
+  // No permitir cantidad menor a lo ya vendido.
+  const { data: tt } = await db.from("ticket_types").select("quantity_sold").eq("id", form.id).maybeSingle();
+  const q = Math.round(form.quantity);
+  if (tt && q < tt.quantity_sold) return { error: `Ya vendiste ${tt.quantity_sold}; la cantidad no puede ser menor` };
+  const { error } = await db.from("ticket_types").update({
+    name: form.name.trim(),
+    price_cents: Math.round(form.price * 100),
+    quantity_total: q,
+  }).eq("id", form.id);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function addTicketType(form: {
+  eventId: string; currency: string; name: string; price: number; quantity: number;
+}) {
+  const db = await createClient();
+  if (!form.name.trim()) return { error: "Nombre requerido" };
+  const { error } = await db.from("ticket_types").insert({
+    event_id: form.eventId,
+    name: form.name.trim(),
+    price_cents: Math.round(form.price * 100),
+    currency: form.currency.toLowerCase(),
+    quantity_total: Math.max(0, Math.round(form.quantity)),
+  });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
 export async function setEventCover(eventId: string, coverUrl: string | null) {
   const db = await createClient();
   // RLS (event_org_write) garantiza que solo un miembro de la org pueda cambiarla.
