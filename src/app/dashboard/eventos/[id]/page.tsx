@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink } from "lucide-react";
+import { ArrowLeft, ExternalLink, BarChart3, Pencil, Ticket as TicketIcon, ShoppingBag, DoorOpen, Map as MapIcon, Megaphone } from "lucide-react";
+import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 import { createClient } from "@/lib/supabase/server";
 import { PromoManager, type PromoRow } from "@/components/dashboard/PromoManager";
 import { OrdersPanel, type OrderRow } from "@/components/dashboard/OrdersPanel";
@@ -148,113 +149,108 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
   const { count: presaleReg } = await db.from("presale_registrations").select("id", { count: "exact", head: true }).eq("event_id", id);
   const { count: presaleSel } = await db.from("presale_registrations").select("id", { count: "exact", head: true }).eq("event_id", id).eq("selected", true);
 
+  const statusBadge: Record<string, string> = {
+    published: "bg-emerald-500/10 text-emerald-300", draft: "bg-surface-2 text-muted",
+    cancelled: "bg-fuchsia/10 text-fuchsia", ended: "bg-surface-2 text-muted",
+  };
+  const statusLabel: Record<string, string> = { published: "Publicado", draft: "Borrador", cancelled: "Cancelado", ended: "Finalizado" };
+
   return (
-    <div className="mx-auto max-w-3xl">
-      <Link href="/dashboard" className="mb-5 flex items-center gap-2 text-sm text-muted transition hover:text-fg">
+    <div className="mx-auto max-w-5xl">
+      <Link href="/dashboard" className="mb-4 flex items-center gap-2 text-sm text-muted transition hover:text-fg">
         <ArrowLeft className="h-4 w-4" /> Mis eventos
       </Link>
 
-      <div className="mb-8 flex items-center justify-between">
-        <div>
-          <h1 className="font-display text-3xl font-bold">{event.title}</h1>
+      <div className="mb-6 flex flex-wrap items-center justify-between gap-3">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2.5">
+            <h1 className="truncate font-display text-2xl font-bold sm:text-3xl">{event.title}</h1>
+            <span className={`shrink-0 rounded-full px-2.5 py-0.5 text-[11px] font-medium ${statusBadge[event.status] ?? "bg-surface-2 text-muted"}`}>
+              {statusLabel[event.status] ?? event.status}
+            </span>
+          </div>
           <p className="mt-1 text-sm text-muted">
             {new Date(event.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}
           </p>
         </div>
         {event.status === "published" && (
-          <Link href={`/e/${event.slug}`} target="_blank" className="glass flex items-center gap-1.5 rounded-full px-4 py-2 text-sm transition hover:border-white/20">
+          <Link href={`/e/${event.slug}`} target="_blank" className="glass flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm transition hover:border-white/20">
             Ver página <ExternalLink className="h-3.5 w-3.5" />
           </Link>
         )}
       </div>
 
-      {/* Comparte tu evento (solo publicado) */}
-      {event.status === "published" && (
-        <div className="mb-6">
-          <ShareEvent slug={event.slug} title={event.title} />
-        </div>
-      )}
-
-      {/* Resumen / analítica del evento */}
-      <div className="mb-6">
-        <EventStats currency={event.currency} netCents={netCents} ticketsSold={ticketsSold}
-          capacity={capacity} ordersCount={ordersCount} series={series} />
-      </div>
-
-      {/* Detalles del evento (editable) */}
-      <div className="mb-6">
-        <EventDetailsEditor e={{
-          id: event.id, title: event.title, description: event.description, category: event.category,
-          city: event.city, region: event.region, startsAt: event.starts_at, endsAt: event.ends_at,
-          timezone: event.timezone, currency: event.currency,
-          isOnline: event.is_online, notifyOnChange: event.notify_on_change,
-        }} />
-      </div>
-
-      {/* Imagen de portada */}
-      <div className="mb-6">
-        <EventCover eventId={id} initial={event.cover_image} />
-      </div>
-
-      {/* Boletos (editable) */}
-      <div className="mb-6">
-        <TicketTypesEditor eventId={id} currency={event.currency} initial={(types ?? []).map((t) => ({
-          id: t.id, name: t.name, price_cents: t.price_cents, quantity_total: t.quantity_total, quantity_sold: t.quantity_sold,
-        }))} />
-      </div>
-
-      {/* Equipo de Recepción (staff de check-in) */}
-      <div className="mb-6">
-        <StaffPanel eventId={id} eventTitle={event.title} initial={staffRows ?? []} />
-      </div>
-
-      {/* Control de Acceso (analítica de check-in) */}
-      <div className="mb-6">
-        <CheckinAnalytics
-          registered={registeredCount ?? 0} checkedIn={checkedInCount ?? 0} capacity={capacity}
-          byHour={byHourArr} byGate={toBuckets(byGate)} byType={toBuckets(byType)}
-          staff={(staffRows ?? []).map((s) => ({ name: s.name, gate: s.gate, scans: s.scans_count, lastActive: s.last_active_at, revoked: s.revoked }))}
-          recent={recent}
-        />
-      </div>
-
-      {/* Órdenes + reembolsos + cancelar evento */}
-      <div className="mb-6">
-        <OrdersPanel eventId={id} currency={event.currency} cancelled={event.status === "cancelled"} initial={orders ?? []} />
-      </div>
-
-      {/* Mapa de recinto (nuevo modelo geométrico) */}
-      <div className="mb-6">
-        <EventVenueMap eventId={id} currency={event.currency} maps={mapOptions} attached={!!emapRow} zonePrices={zonePrices} />
-      </div>
-
-      {/* Cola virtual (alta demanda) */}
-      <div className="mb-6">
-        <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} maxPerBuyer={event.max_tickets_per_buyer} safetix={event.safetix_enabled} />
-      </div>
-
-      {/* Verified Fan / Presale */}
-      <div className="mb-6">
-        <PresaleControl eventId={id} enabled={event.presale_enabled} endsAt={event.presale_ends_at} registered={presaleReg ?? 0} selected={presaleSel ?? 0} />
-      </div>
-
-      {/* Email a compradores + lista de espera */}
-      <div className="mb-6">
-        <CampaignComposer eventId={id} buyers={buyersCount} waitlistCount={waitlistCount ?? 0} />
-      </div>
-
-      {/* Servicios / extras */}
-      <div className="mb-6">
-        <ServicesManager eventId={id} currency={event.currency} initial={svcRows ?? []} />
-      </div>
-
-      {/* Asientos numerados (modelo simple legacy) */}
-      <div className="mb-6">
-        <SeatBuilder eventId={id} tiers={tierOptions} />
-      </div>
-
-      {/* Promo codes */}
-      <PromoManager eventId={id} currency={event.currency} initial={promos ?? []} />
+      <DashboardTabs
+        tabs={[
+          {
+            id: "resumen", label: "Resumen", icon: <BarChart3 className="h-4 w-4" />,
+            content: (
+              <>
+                {event.status === "published" && <ShareEvent slug={event.slug} title={event.title} />}
+                <EventStats currency={event.currency} netCents={netCents} ticketsSold={ticketsSold} capacity={capacity} ordersCount={ordersCount} series={series} />
+                <CheckinAnalytics
+                  registered={registeredCount ?? 0} checkedIn={checkedInCount ?? 0} capacity={capacity}
+                  byHour={byHourArr} byGate={toBuckets(byGate)} byType={toBuckets(byType)}
+                  staff={(staffRows ?? []).map((s) => ({ name: s.name, gate: s.gate, scans: s.scans_count, lastActive: s.last_active_at, revoked: s.revoked }))}
+                  recent={recent}
+                />
+              </>
+            ),
+          },
+          {
+            id: "detalles", label: "Detalles", icon: <Pencil className="h-4 w-4" />,
+            content: (
+              <>
+                <EventDetailsEditor e={{
+                  id: event.id, title: event.title, description: event.description, category: event.category,
+                  city: event.city, region: event.region, startsAt: event.starts_at, endsAt: event.ends_at,
+                  timezone: event.timezone, currency: event.currency, isOnline: event.is_online, notifyOnChange: event.notify_on_change,
+                }} />
+                <EventCover eventId={id} initial={event.cover_image} />
+              </>
+            ),
+          },
+          {
+            id: "boletos", label: "Boletos", icon: <TicketIcon className="h-4 w-4" />,
+            content: (
+              <>
+                <TicketTypesEditor eventId={id} currency={event.currency} initial={(types ?? []).map((t) => ({
+                  id: t.id, name: t.name, price_cents: t.price_cents, quantity_total: t.quantity_total, quantity_sold: t.quantity_sold,
+                }))} />
+                <ServicesManager eventId={id} currency={event.currency} initial={svcRows ?? []} />
+                <PromoManager eventId={id} currency={event.currency} initial={promos ?? []} />
+              </>
+            ),
+          },
+          {
+            id: "ordenes", label: "Órdenes", icon: <ShoppingBag className="h-4 w-4" />,
+            content: <OrdersPanel eventId={id} currency={event.currency} cancelled={event.status === "cancelled"} initial={orders ?? []} />,
+          },
+          {
+            id: "acceso", label: "Acceso", icon: <DoorOpen className="h-4 w-4" />,
+            content: (
+              <>
+                <StaffPanel eventId={id} eventTitle={event.title} initial={staffRows ?? []} />
+                <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} maxPerBuyer={event.max_tickets_per_buyer} safetix={event.safetix_enabled} />
+                <PresaleControl eventId={id} enabled={event.presale_enabled} endsAt={event.presale_ends_at} registered={presaleReg ?? 0} selected={presaleSel ?? 0} />
+              </>
+            ),
+          },
+          {
+            id: "recinto", label: "Recinto", icon: <MapIcon className="h-4 w-4" />,
+            content: (
+              <>
+                <EventVenueMap eventId={id} currency={event.currency} maps={mapOptions} attached={!!emapRow} zonePrices={zonePrices} />
+                <SeatBuilder eventId={id} tiers={tierOptions} />
+              </>
+            ),
+          },
+          {
+            id: "marketing", label: "Marketing", icon: <Megaphone className="h-4 w-4" />,
+            content: <CampaignComposer eventId={id} buyers={buyersCount} waitlistCount={waitlistCount ?? 0} />,
+          },
+        ]}
+      />
     </div>
   );
 }

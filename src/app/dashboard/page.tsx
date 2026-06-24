@@ -117,36 +117,44 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           </Link>
         </div>
       ) : (
-        <div className="space-y-3">
-          {events.map((e) => (
-            <div key={e.id} className="glass flex items-center gap-4 rounded-2xl p-4">
-              <div className="h-14 w-14 shrink-0 overflow-hidden rounded-xl bg-surface-2">
-                {e.cover_image && <img src={e.cover_image} alt="" className="h-full w-full object-cover" />}
-              </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
-                  <h3 className="truncate font-medium">{e.title}</h3>
-                  <Badge status={e.status} />
-                </div>
-                <p className="text-sm text-muted">
-                  {new Date(e.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
-                  {" · "}
-                  {money(revenueByEvent[e.id] ?? 0, e.currency)} · {(ticketsByEvent[e.id] ?? 0).toLocaleString("es-MX")} boletos
-                </p>
-              </div>
-              <div className="flex items-center gap-3">
-                <Link href={`/dashboard/eventos/${e.id}`} className="text-sm text-muted transition hover:text-fg">
-                  Gestionar
+        <>
+          <div className="mb-3 flex items-center justify-between">
+            <h2 className="font-display text-lg font-semibold">Tus eventos</h2>
+            <span className="text-sm text-muted">{events.length} {events.length === 1 ? "evento" : "eventos"}</span>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {events.map((e) => (
+              <div key={e.id} className="glass overflow-hidden rounded-2xl transition hover:border-white/15">
+                <Link href={`/dashboard/eventos/${e.id}`} className="block">
+                  <div className="relative aspect-[16/9] w-full bg-surface-2">
+                    {e.cover_image
+                      ? <img src={e.cover_image} alt="" className="h-full w-full object-cover" />
+                      : <div className="grid h-full place-items-center text-muted"><Calendar className="h-7 w-7" /></div>}
+                    <span className="absolute right-2 top-2"><Badge status={e.status} /></span>
+                  </div>
                 </Link>
-                {e.status === "published" && (
-                  <Link href={`/e/${e.slug}`} target="_blank" className="flex items-center gap-1.5 text-sm text-muted transition hover:text-fg">
-                    Ver <ExternalLink className="h-3.5 w-3.5" />
-                  </Link>
-                )}
+                <div className="p-4">
+                  <h3 className="truncate font-medium">{e.title}</h3>
+                  <p className="mt-0.5 text-xs text-muted">
+                    {new Date(e.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
+                  </p>
+                  <div className="mt-3 flex items-center gap-3 text-sm">
+                    <span className="font-display font-bold text-gold">{money(revenueByEvent[e.id] ?? 0, e.currency)}</span>
+                    <span className="text-muted">{(ticketsByEvent[e.id] ?? 0).toLocaleString("es-MX")} boletos</span>
+                  </div>
+                  <div className="mt-3 flex items-center justify-between border-t border-line pt-3 text-sm">
+                    <Link href={`/dashboard/eventos/${e.id}`} className="font-medium text-fg transition hover:text-fuchsia">Gestionar</Link>
+                    {e.status === "published" && (
+                      <Link href={`/e/${e.slug}`} target="_blank" className="flex items-center gap-1.5 text-muted transition hover:text-fg">
+                        Ver <ExternalLink className="h-3.5 w-3.5" />
+                      </Link>
+                    )}
+                  </div>
+                </div>
               </div>
-            </div>
-          ))}
-        </div>
+            ))}
+          </div>
+        </>
       )}
     </div>
   );
