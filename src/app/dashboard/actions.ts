@@ -528,6 +528,15 @@ export async function revokeCheckinStaff(form: { staffId: string; eventId: strin
   return { ok: true };
 }
 
+export async function deleteOrder(form: { orderId: string; eventId: string }) {
+  const db = await createClient();
+  // RPC delete_order: valida que el usuario sea miembro de la org y libera inventario/asientos.
+  const { error } = await db.rpc("delete_order", { p_order_id: form.orderId });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
 export async function removeCheckinStaff(form: { staffId: string; eventId: string }) {
   const db = await createClient();
   const { error } = await db.from("event_staff").delete().eq("id", form.staffId);

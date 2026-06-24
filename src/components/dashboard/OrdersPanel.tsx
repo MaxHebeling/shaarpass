@@ -2,8 +2,9 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RotateCcw, Ban, Download } from "lucide-react";
+import { Loader2, RotateCcw, Ban, Download, Trash2 } from "lucide-react";
 import { money } from "@/lib/money";
+import { deleteOrder } from "@/app/dashboard/actions";
 
 export interface OrderRow {
   id: string;
@@ -51,6 +52,21 @@ export function OrdersPanel({
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo reembolsar");
       setOrders((o) => o.map((x) => (x.id === id ? { ...x, status: "refunded" } : x)));
+      router.refresh();
+    } catch (e) { setError((e as Error).message); }
+    finally { setBusy(null); }
+  }
+
+  async function remove(o: OrderRow) {
+    const paidWarning = o.status === "paid" && o.total_cents > 0
+      ? "\n\n⚠️ Esta orden está PAGADA. Eliminarla NO reembolsa el dinero (usa Reembolsar primero). Solo borra el registro y libera el cupo."
+      : "";
+    if (!confirm(`¿Eliminar a ${o.buyer_name || o.buyer_email}? Se borra su registro y sus boletos dejan de ser válidos. No se puede deshacer.${paidWarning}`)) return;
+    setBusy(o.id); setError(null);
+    try {
+      const res = await deleteOrder({ orderId: o.id, eventId });
+      if (res?.error) throw new Error(res.error);
+      setOrders((arr) => arr.filter((x) => x.id !== o.id));
       router.refresh();
     } catch (e) { setError((e as Error).message); }
     finally { setBusy(null); }
@@ -126,6 +142,13 @@ export function OrdersPanel({
                     Reembolsar
                   </button>
                 )}
+                <button
+                  onClick={() => remove(o)} disabled={busy === o.id}
+                  aria-label="Eliminar"
+                  className="grid h-8 w-8 place-items-center rounded-lg border border-line text-muted transition hover:border-rose-500/50 hover:text-rose-400 disabled:opacity-50"
+                >
+                  {busy === o.id ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Trash2 className="h-3.5 w-3.5" />}
+                </button>
               </div>
             </div>
           ))}
