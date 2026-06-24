@@ -2,7 +2,27 @@
 
 import { useEffect, useRef, useState, useCallback } from "react";
 import { motion, AnimatePresence } from "motion/react";
-import { CheckCircle2, XCircle, AlertTriangle, Camera, Search, DoorOpen, Calendar, MapPin, UserCheck, Loader2 } from "lucide-react";
+import { CheckCircle2, XCircle, AlertTriangle, Camera, Search, DoorOpen, Calendar, MapPin, UserCheck, Loader2, Download } from "lucide-react";
+
+interface BIPEvent extends Event { prompt: () => Promise<void>; userChoice: Promise<{ outcome: string }>; }
+
+function InstallButton() {
+  const [evt, setEvt] = useState<BIPEvent | null>(null);
+  useEffect(() => {
+    const standalone = window.matchMedia?.("(display-mode: standalone)").matches || (navigator as unknown as { standalone?: boolean }).standalone;
+    if (standalone) return;
+    const onPrompt = (e: Event) => { e.preventDefault(); setEvt(e as BIPEvent); };
+    window.addEventListener("beforeinstallprompt", onPrompt);
+    return () => window.removeEventListener("beforeinstallprompt", onPrompt);
+  }, []);
+  if (!evt) return null;
+  return (
+    <button onClick={async () => { await evt.prompt(); setEvt(null); }}
+      className="flex items-center gap-1.5 rounded-full border border-line px-3 py-1.5 text-xs font-medium transition hover:border-white/20">
+      <Download className="h-3.5 w-3.5" /> Instalar app
+    </button>
+  );
+}
 
 interface EventInfo { title: string; coverImage: string | null; startsAt: string; timezone: string; city: string | null; region: string | null; isOnline: boolean; }
 interface ScanResult { result: "ok" | "already" | "invalid"; message: string; attendee?: string | null; type?: string | null; at?: string | null; gate?: string | null; }
@@ -30,6 +50,9 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
 
   // Polling de estadísticas (sincroniza varios dispositivos cada ~4s).
   useEffect(() => { loadStats(); const id = setInterval(loadStats, 4000); return () => clearInterval(id); }, [loadStats]);
+
+  // Recuerda este escáner para que la PWA instalada reabra aquí.
+  useEffect(() => { try { localStorage.setItem("shaarpass:checkin-token", token); } catch { /* noop */ } }, [token]);
 
   const submit = useCallback(async (qrToken: string, manual = false) => {
     if (busyRef.current) return;
@@ -101,9 +124,12 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
             <span className="flex items-center gap-1"><Calendar className="h-3.5 w-3.5" /> <span className="capitalize">{fmtWhen}</span></span>
             <span className="flex items-center gap-1"><MapPin className="h-3.5 w-3.5" /> {location}</span>
           </div>
-          <div className="mt-2 flex items-center gap-2 text-xs">
-            <span className="flex items-center gap-1 rounded-full bg-fuchsia/10 px-2.5 py-1 font-medium text-fuchsia"><DoorOpen className="h-3.5 w-3.5" /> {gate || "Acceso general"}</span>
-            <span className="text-muted">· {staffName}</span>
+          <div className="mt-2 flex flex-wrap items-center justify-between gap-2 text-xs">
+            <div className="flex items-center gap-2">
+              <span className="flex items-center gap-1 rounded-full bg-fuchsia/10 px-2.5 py-1 font-medium text-fuchsia"><DoorOpen className="h-3.5 w-3.5" /> {gate || "Acceso general"}</span>
+              <span className="text-muted">· {staffName}</span>
+            </div>
+            <InstallButton />
           </div>
         </div>
       </header>
