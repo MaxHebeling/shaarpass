@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, ExternalLink, Calendar, TrendingUp, Ticket as TicketIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { money } from "@/lib/money";
+import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,22 @@ export default async function DashboardPage() {
   const totalTickets = Object.values(ticketsByEvent).reduce((a, b) => a + b, 0);
   const currency = events?.[0]?.currency ?? "usd";
 
+  // Estado de onboarding (guía de primeros pasos para organizadores nuevos).
+  const hasEvent = events.length > 0;
+  const hasPublished = events.some((e) => e.status === "published");
+  const hasCover = events.some((e) => !!e.cover_image);
+  let hasTickets = false, payoutsEnabled = false;
+  if (ids.length) {
+    const { count: ttCount } = await db.from("ticket_types").select("id", { count: "exact", head: true }).in("event_id", ids);
+    hasTickets = (ttCount ?? 0) > 0;
+  }
+  if (orgIds.length) {
+    const { data: org } = await db.from("organizations").select("stripe_account_id, payouts_enabled").eq("id", orgIds[0]).maybeSingle();
+    payoutsEnabled = !!(org?.stripe_account_id && org?.payouts_enabled);
+  }
+  const onboarded = hasPublished && hasTickets;
+  const manageHref = events[0] ? `/dashboard/eventos/${events[0].id}` : null;
+
   return (
     <div className="mx-auto max-w-5xl">
       <div className="mb-8 flex items-center justify-between">
@@ -76,6 +93,13 @@ export default async function DashboardPage() {
           <Plus className="h-4 w-4" /> Crear evento
         </Link>
       </div>
+
+      {!onboarded && (
+        <OnboardingChecklist
+          hasEvent={hasEvent} hasTickets={hasTickets} hasCover={hasCover}
+          payoutsEnabled={payoutsEnabled} hasPublished={hasPublished} manageHref={manageHref}
+        />
+      )}
 
       <div className="mb-8 grid grid-cols-2 gap-4 md:grid-cols-3">
         <KPI icon={TrendingUp} label="Ventas totales" value={money(totalRevenue, currency)} />
