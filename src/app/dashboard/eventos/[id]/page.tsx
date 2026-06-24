@@ -16,6 +16,7 @@ import { TicketTypesEditor } from "@/components/dashboard/TicketTypesEditor";
 import { EventStats, type DayPoint } from "@/components/dashboard/EventStats";
 import { StaffPanel, type StaffRow } from "@/components/dashboard/StaffPanel";
 import { CheckinAnalytics, type Bucket, type RecentScan } from "@/components/dashboard/CheckinAnalytics";
+import { ShareEvent } from "@/components/dashboard/ShareEvent";
 
 export const dynamic = "force-dynamic";
 
@@ -166,6 +167,13 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
           </Link>
         )}
       </div>
+
+      {/* Comparte tu evento (solo publicado) */}
+      {event.status === "published" && (
+        <div className="mb-6">
+          <ShareEvent slug={event.slug} title={event.title} />
+        </div>
+      )}
 
       {/* Resumen / analítica del evento */}
       <div className="mb-6">
