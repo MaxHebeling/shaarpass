@@ -199,9 +199,20 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     ...(lowestPriceCents != null && { lowPrice: (lowestPriceCents / 100).toFixed(2) }),
   };
 
+  const breadcrumbJsonLd = {
+    "@context": "https://schema.org",
+    "@type": "BreadcrumbList",
+    itemListElement: [
+      { "@type": "ListItem", position: 1, name: "Inicio", item: base },
+      { "@type": "ListItem", position: 2, name: "Descubrir", item: `${base}/descubrir` },
+      { "@type": "ListItem", position: 3, name: event.title, item: `${base}/e/${slug}` },
+    ],
+  };
+
   return (
     <main className="relative min-h-screen pb-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
+      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
       {/* Cover */}
       <div className="relative h-[42vh] min-h-[320px] w-full overflow-hidden md:h-[52vh]">
         {event.cover_image && (

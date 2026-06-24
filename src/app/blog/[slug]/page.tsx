@@ -31,15 +31,28 @@ export default async function BlogPost({ params }: { params: Promise<{ slug: str
 
   const articleJsonLd = {
     "@context": "https://schema.org",
-    "@type": "Article",
-    headline: post.title,
-    description: post.description,
-    datePublished: post.dateISO,
-    dateModified: post.dateISO,
-    inLanguage: "es",
-    mainEntityOfPage: `${SITE}/blog/${slug}`,
-    author: { "@type": "Organization", name: "ShaarPass", url: SITE },
-    publisher: { "@type": "Organization", name: "ShaarPass", logo: { "@type": "ImageObject", url: `${SITE}/icon.png` } },
+    "@graph": [
+      {
+        "@type": "Article",
+        headline: post.title,
+        description: post.description,
+        image: [`${SITE}/og.jpg`],
+        datePublished: post.dateISO,
+        dateModified: post.dateISO,
+        inLanguage: "es",
+        mainEntityOfPage: `${SITE}/blog/${slug}`,
+        author: { "@type": "Organization", name: "ShaarPass", url: SITE },
+        publisher: { "@type": "Organization", name: "ShaarPass", logo: { "@type": "ImageObject", url: `${SITE}/icon.png` } },
+      },
+      {
+        "@type": "BreadcrumbList",
+        itemListElement: [
+          { "@type": "ListItem", position: 1, name: "Inicio", item: SITE },
+          { "@type": "ListItem", position: 2, name: "Blog", item: `${SITE}/blog` },
+          { "@type": "ListItem", position: 3, name: post.title, item: `${SITE}/blog/${slug}` },
+        ],
+      },
+    ],
   };
 
   return (
