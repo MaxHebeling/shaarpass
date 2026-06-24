@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { MapEditor, type EditorZone, type EditorSeat } from "@/components/dashboard/MapEditor";
+import { AutoVenueAI } from "@/components/dashboard/AutoVenueAI";
 
 export const dynamic = "force-dynamic";
 
@@ -50,6 +51,8 @@ export default async function MapEditorPage({ params }: { params: Promise<{ mapI
         <h1 className="font-display text-2xl font-bold">{map.venues_v2?.name ?? "Recinto"}</h1>
         <p className="text-sm text-muted">{map.name} · {map.width_m}×{map.height_m} m</p>
       </div>
+      <AutoVenueAI mapId={map.id} defaultWidth={Number(map.width_m)} defaultHeight={Number(map.height_m)} hasBackground={!!map.background_url} />
+
       <MapEditor
         mapId={map.id}
         widthM={Number(map.width_m)}

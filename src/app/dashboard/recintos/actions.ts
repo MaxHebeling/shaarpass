@@ -79,6 +79,48 @@ export async function recalibrateMap(mapId: string, factor: number) {
   return { ok: true };
 }
 
+export async function autoGenerateLayout(form: {
+  mapId: string; widthM: number; lengthM: number; unit: "m" | "ft";
+  totalChairs: number; perRow: number; seatGap: number; rowGap: number;
+  centralAisle: boolean; lateralAisles: boolean;
+}) {
+  const db = await createClient();
+  const { computeLayout } = await import("@/lib/venue/autoLayout");
+  const f = form.unit === "ft" ? 0.3048 : 1;
+  const layout = computeLayout({
+    widthM: form.widthM * f, lengthM: form.lengthM * f,
+    totalChairs: form.totalChairs, perRow: form.perRow,
+    seatGap: form.seatGap * f, rowGap: form.rowGap * f,
+    centralAisle: form.centralAisle, lateralAisles: form.lateralAisles,
+  });
+
+  // Escala el mapa a las medidas reales.
+  await db.from("venue_maps").update({ width_m: layout.widthM, height_m: layout.lengthM }).eq("id", form.mapId);
+
+  // Limpia zonas previas (regenerar / optimizar reemplaza la propuesta).
+  const { data: existing } = await db.from("zones").select("id").eq("map_id", form.mapId);
+  for (const z of existing ?? []) await db.rpc("delete_zone", { p_zone: z.id });
+
+  // Bloques de sillas (zona 'seated' + asientos en grilla).
+  for (const b of layout.blocks) {
+    if (b.cols < 1 || b.rows < 1) continue;
+    const { data: zoneId, error } = await db.rpc("save_zone", { p_map: form.mapId, p_name: b.name, p_kind: "seated", p_color: b.color, p_points: b.points, p_ga_capacity: null });
+    if (error) return { error: error.message };
+    if (zoneId) {
+      const { error: sErr } = await db.rpc("generate_zone_seats", { p_zone: zoneId, p_rows: b.rows, p_cols: b.cols, p_row_start: "A", p_seat_start: 1, p_origin_x: b.originX, p_origin_y: b.originY, p_dx: b.dx, p_dy: b.dy });
+      if (sErr) return { error: sErr.message };
+    }
+  }
+  // Áreas sugeridas (zonas 'ga' etiquetadas, editables).
+  for (const a of layout.areas) {
+    const { error } = await db.rpc("save_zone", { p_map: form.mapId, p_name: a.name, p_kind: "ga", p_color: a.color, p_points: a.points, p_ga_capacity: null });
+    if (error) return { error: error.message };
+  }
+
+  revalidatePath(`/dashboard/recintos/${form.mapId}`);
+  return { ok: true, summary: layout.summary };
+}
+
 export async function publishMap(mapId: string) {
   const db = await createClient();
   const { error } = await db.rpc("publish_map", { p_map: mapId });
