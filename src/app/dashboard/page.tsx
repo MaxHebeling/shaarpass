@@ -19,11 +19,25 @@ export default async function DashboardPage() {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
 
-  const { data: events } = await db
-    .from("events")
-    .select("id, slug, title, status, currency, starts_at, cover_image")
-    .order("starts_at", { ascending: true })
-    .returns<EventAgg[]>();
+  // Solo los eventos de las organizaciones del usuario (aislamiento multi-tenant).
+  // La RLS permite leer eventos publicados a cualquiera (páginas públicas), así que
+  // aquí filtramos explícitamente por org para que el dashboard sea solo "lo tuyo".
+  const { data: memberships } = await db
+    .from("org_members")
+    .select("org_id")
+    .eq("user_id", user?.id ?? "");
+  const orgIds = (memberships ?? []).map((m) => m.org_id);
+
+  let events: EventAgg[] = [];
+  if (orgIds.length) {
+    const { data } = await db
+      .from("events")
+      .select("id, slug, title, status, currency, starts_at, cover_image")
+      .in("org_id", orgIds)
+      .order("starts_at", { ascending: true })
+      .returns<EventAgg[]>();
+    events = data ?? [];
+  }
 
   // Métricas agregadas por evento (ventas pagadas + boletos emitidos).
   const ids = (events ?? []).map((e) => e.id);

@@ -8,10 +8,18 @@ export const dynamic = "force-dynamic";
 
 export default async function AbonosPage() {
   const db = await createClient();
-  const { data: seasons } = await db
-    .from("seasons")
-    .select("id, slug, title, currency, price_cents, quantity_total, quantity_sold, status")
-    .order("created_at", { ascending: false });
+  const { data: { user } } = await db.auth.getUser();
+  // Solo abonos de las organizaciones del usuario (la RLS permite leer los publicados).
+  const { data: memberships } = await db.from("org_members").select("org_id").eq("user_id", user?.id ?? "");
+  const orgIds = (memberships ?? []).map((m) => m.org_id);
+
+  const { data: seasons } = orgIds.length
+    ? await db
+        .from("seasons")
+        .select("id, slug, title, currency, price_cents, quantity_total, quantity_sold, status")
+        .in("org_id", orgIds)
+        .order("created_at", { ascending: false })
+    : { data: [] };
 
   return (
     <div className="mx-auto max-w-3xl">

@@ -20,9 +20,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
+    .select("id, org_id, slug, title, status, currency, starts_at, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
     .eq("id", id)
-    .maybeSingle<{ id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
+    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; status: string; currency: string; starts_at: string; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -56,9 +56,10 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     .order("created_at", { ascending: false })
     .returns<OrderRow[]>();
 
-  // Mapa de recinto: opciones publicadas + estado de asociación + precios por zona.
+  // Mapa de recinto: solo los mapas publicados de TU organización (no de otras).
   const { data: pubMaps } = await db
-    .from("venue_maps").select("id, name, venues_v2(name)").eq("status", "published");
+    .from("venue_maps").select("id, name, venues_v2!inner(name, org_id)")
+    .eq("status", "published").eq("venues_v2.org_id", event.org_id);
   const mapOptions: PublishedMap[] = (pubMaps ?? []).map((m) => ({
     id: m.id, label: `${(m.venues_v2 as unknown as { name: string } | null)?.name ?? "Recinto"} — ${m.name}`,
   }));
