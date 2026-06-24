@@ -23,9 +23,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, slug, title, description, category, status, currency, starts_at, ends_at, timezone, city, region, cover_image, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
+    .select("id, org_id, slug, title, description, category, status, currency, starts_at, ends_at, timezone, city, region, cover_image, is_online, notify_on_change, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at")
     .eq("id", id)
-    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; description: string | null; category: string | null; status: string; currency: string; starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; cover_image: string | null; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
+    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; description: string | null; category: string | null; status: string; currency: string; starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; cover_image: string | null; is_online: boolean; notify_on_change: boolean; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -147,6 +147,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
           id: event.id, title: event.title, description: event.description, category: event.category,
           city: event.city, region: event.region, startsAt: event.starts_at, endsAt: event.ends_at,
           timezone: event.timezone, currency: event.currency,
+          isOnline: event.is_online, notifyOnChange: event.notify_on_change,
         }} />
       </div>
 

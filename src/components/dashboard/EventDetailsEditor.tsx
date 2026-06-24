@@ -12,7 +12,7 @@ const label = "mb-1.5 block text-xs text-muted";
 export interface EventDetails {
   id: string; title: string; description: string | null; category: string | null;
   city: string | null; region: string | null; startsAt: string; endsAt: string;
-  timezone: string; currency: string;
+  timezone: string; currency: string; isOnline: boolean; notifyOnChange: boolean;
 }
 
 export function EventDetailsEditor({ e }: { e: EventDetails }) {
@@ -24,6 +24,7 @@ export function EventDetailsEditor({ e }: { e: EventDetails }) {
     city: e.city ?? "", region: e.region ?? "",
     startsDate: startW.date, startsTime: startW.time, endsDate: endW.date, endsTime: endW.time,
     timezone: e.timezone || "America/Mexico_City", currency: e.currency,
+    isOnline: e.isOnline, notifyOnChange: e.notifyOnChange,
   });
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
@@ -39,8 +40,18 @@ export function EventDetailsEditor({ e }: { e: EventDetails }) {
         startsAt: wallTimeToISO(f.startsDate, f.startsTime, f.timezone),
         endsAt: wallTimeToISO(f.endsDate, f.endsTime, f.timezone),
         timezone: f.timezone, currency: f.currency,
+        isOnline: f.isOnline, notifyOnChange: f.notifyOnChange,
       });
-      if (res?.error) setErr(res.error); else setMsg("✅ Guardado");
+      if (res?.error) { setErr(res.error); return; }
+      if (res?.notify) {
+        const n = res.notify;
+        const detail = n.queued
+          ? `📧 Enviando notificaciones automáticas a ${n.recipients} asistentes…`
+          : n.recipients > 0
+            ? `📧 Se enviaron notificaciones automáticas a ${n.sent} de ${n.recipients} asistentes.`
+            : "No hay asistentes registrados todavía.";
+        setMsg(`✅ Se detectaron cambios importantes (${n.fields.join(", ")}). ${detail}`);
+      } else setMsg("✅ Guardado");
     });
   }
 
@@ -56,10 +67,17 @@ export function EventDetailsEditor({ e }: { e: EventDetails }) {
           <label className={label}>Descripción</label>
           <textarea value={f.description} onChange={(e) => set("description", e.target.value)} rows={4} className={field} />
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
+        <div className="grid gap-4 sm:grid-cols-3">
           <div>
             <label className={label}>Categoría</label>
             <input value={f.category} onChange={(e) => set("category", e.target.value)} className={field} />
+          </div>
+          <div>
+            <label className={label}>Modalidad</label>
+            <select value={f.isOnline ? "online" : "presencial"} onChange={(e) => setF((p) => ({ ...p, isOnline: e.target.value === "online" }))} className={field}>
+              <option value="presencial">Presencial</option>
+              <option value="online">Virtual (en línea)</option>
+            </select>
           </div>
           <div>
             <label className={label}>Moneda</label>
@@ -94,8 +112,15 @@ export function EventDetailsEditor({ e }: { e: EventDetails }) {
           <div><label className={label}>Ciudad</label><input value={f.city} onChange={(e) => set("city", e.target.value)} className={field} /></div>
           <div><label className={label}>Estado</label><input value={f.region} onChange={(e) => set("region", e.target.value)} className={field} /></div>
         </div>
+        <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface/40 px-4 py-3 text-sm">
+          <input type="checkbox" checked={f.notifyOnChange} onChange={(ev) => setF((p) => ({ ...p, notifyOnChange: ev.target.checked }))}
+            className="mt-0.5 h-4 w-4 shrink-0 accent-fuchsia-500" />
+          <span className="text-muted">
+            Notificar automáticamente a los asistentes cuando cambien <span className="text-fg">fecha, horario, ubicación o modalidad</span> del evento.
+          </span>
+        </label>
         {err && <p className="text-sm text-fuchsia">{err}</p>}
-        {msg && <p className="text-sm text-emerald-400">{msg}</p>}
+        {msg && <p className="text-sm leading-relaxed text-emerald-400">{msg}</p>}
         <button onClick={save} disabled={pending}
           className="brand-gradient flex items-center gap-2 rounded-2xl px-6 py-3 font-semibold text-ink disabled:opacity-50">
           {pending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Check className="h-4 w-4" />} Guardar cambios
