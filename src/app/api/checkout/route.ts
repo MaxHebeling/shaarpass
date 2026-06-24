@@ -11,6 +11,11 @@ export const runtime = "nodejs";
 const Body = z.object({
   eventId: z.string().uuid(),
   buyerEmail: z.string().email(),
+  buyerFirstName: z.string().trim().min(1).max(60),
+  buyerLastName: z.string().trim().min(1).max(60),
+  buyerCity: z.string().trim().min(1).max(80),
+  buyerCountry: z.string().trim().min(1).max(60),
+  buyerPhone: z.string().trim().max(30).optional(),
   sessionId: z.string().min(8),
   idempotencyKey: z.string().min(8),
   promoCode: z.string().max(40).optional(),
@@ -32,7 +37,8 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "payload inválido" }, { status: 400 });
   }
-  const { eventId, buyerEmail, sessionId, idempotencyKey, promoCode, items, services, queueToken, presaleCode } = parsed.data;
+  const { eventId, buyerEmail, buyerFirstName, buyerLastName, buyerCity, buyerCountry, buyerPhone, sessionId, idempotencyKey, promoCode, items, services, queueToken, presaleCode } = parsed.data;
+  const buyerName = `${buyerFirstName} ${buyerLastName}`.trim();
   const db = createAdminClient();
 
   // Rate limit por IP (anti-abuso): máx 30 intentos de checkout / minuto.
@@ -178,6 +184,10 @@ export async function POST(req: Request) {
       event_id: eventId,
       org_id: event.org_id,
       buyer_email: buyerEmail,
+      buyer_name: buyerName,
+      buyer_phone: buyerPhone?.trim() || null,
+      buyer_city: buyerCity,
+      buyer_country: buyerCountry,
       status: "pending",
       subtotal_cents: subtotalCents,
       discount_cents: discountCents,

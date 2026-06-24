@@ -21,6 +21,11 @@ export default function CheckoutPage() {
   const router = useRouter();
   const [cart, setCart] = useState<Cart | null>(null);
   const [email, setEmail] = useState("");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [city, setCity] = useState("");
+  const [country, setCountry] = useState("");
+  const [phone, setPhone] = useState("");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -96,6 +101,11 @@ export default function CheckoutPage() {
         body: JSON.stringify({
           eventId: cart.eventId,
           buyerEmail: email,
+          buyerFirstName: firstName,
+          buyerLastName: lastName,
+          buyerCity: city,
+          buyerCountry: country,
+          buyerPhone: phone || undefined,
           sessionId: crypto.randomUUID(),
           idempotencyKey: crypto.randomUUID(),
           promoCode: promo?.code,
@@ -217,13 +227,42 @@ export default function CheckoutPage() {
       {/* Paso email → pago */}
       {!clientSecret ? (
         <form onSubmit={startPayment} className="mt-6 space-y-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">Nombre *</label>
+              <input required value={firstName} onChange={(e) => setFirstName(e.target.value)} maxLength={60} placeholder="María"
+                className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">Apellido *</label>
+              <input required value={lastName} onChange={(e) => setLastName(e.target.value)} maxLength={60} placeholder="González"
+                className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
+            </div>
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">Ciudad *</label>
+              <input required value={city} onChange={(e) => setCity(e.target.value)} maxLength={80} placeholder="Salta"
+                className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
+            </div>
+            <div>
+              <label className="mb-1.5 block text-xs text-muted">País *</label>
+              <input required value={country} onChange={(e) => setCountry(e.target.value)} maxLength={60} placeholder="Argentina"
+                className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
+            </div>
+          </div>
           <div>
-            <label className="mb-1.5 block text-xs text-muted">Correo (te enviaremos los boletos)</label>
+            <label className="mb-1.5 block text-xs text-muted">Correo (te enviaremos los boletos) *</label>
             <input
               type="email" required value={email} onChange={(e) => setEmail(e.target.value)}
               placeholder="tu@correo.com"
               className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60"
             />
+          </div>
+          <div>
+            <label className="mb-1.5 block text-xs text-muted">WhatsApp (opcional)</label>
+            <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={30} placeholder="+54 9 387 123 4567"
+              className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
           </div>
           <div>
             <label className="mb-1.5 block text-xs text-muted">Código de presale (si aplica)</label>

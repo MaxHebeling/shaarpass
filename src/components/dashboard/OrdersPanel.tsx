@@ -2,15 +2,34 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RotateCcw, Ban } from "lucide-react";
+import { Loader2, RotateCcw, Ban, Download } from "lucide-react";
 import { money } from "@/lib/money";
 
 export interface OrderRow {
   id: string;
   buyer_email: string;
+  buyer_name: string | null;
+  buyer_phone: string | null;
+  buyer_city: string | null;
+  buyer_country: string | null;
   total_cents: number;
   status: string;
   created_at: string;
+}
+
+function exportCSV(orders: OrderRow[], currency: string) {
+  const head = ["Nombre", "Correo", "WhatsApp", "Ciudad", "País", "Estado", "Total", "Fecha"];
+  const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
+  const rows = orders.map((o) => [
+    o.buyer_name ?? "", o.buyer_email, o.buyer_phone ?? "", o.buyer_city ?? "", o.buyer_country ?? "",
+    o.status, (o.total_cents / 100).toFixed(2) + " " + currency.toUpperCase(),
+    new Date(o.created_at).toISOString().slice(0, 10),
+  ].map((c) => esc(String(c))).join(","));
+  const csv = [head.join(","), ...rows].join("\n");
+  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
+  const a = document.createElement("a");
+  a.href = url; a.download = "registrados.csv"; a.click();
+  URL.revokeObjectURL(url);
 }
 
 export function OrdersPanel({
@@ -56,8 +75,15 @@ export function OrdersPanel({
 
   return (
     <div className="glass rounded-3xl p-6">
-      <div className="mb-4 flex items-center justify-between">
-        <h2 className="font-display text-lg font-semibold">Órdenes</h2>
+      <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
+        <h2 className="font-display text-lg font-semibold">Órdenes y registrados</h2>
+        <div className="flex items-center gap-2">
+        {orders.length > 0 && (
+          <button onClick={() => exportCSV(orders, currency)}
+            className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium transition hover:border-white/20">
+            <Download className="h-4 w-4" /> Exportar CSV
+          </button>
+        )}
         {!cancelled && (
           <button
             onClick={cancelEvent} disabled={canceling}
@@ -68,6 +94,7 @@ export function OrdersPanel({
           </button>
         )}
         {cancelled && <span className="rounded-full bg-fuchsia/10 px-3 py-1 text-xs font-medium text-fuchsia">Evento cancelado</span>}
+        </div>
       </div>
 
       {error && <p className="mb-3 text-sm text-fuchsia">{error}</p>}
@@ -78,9 +105,14 @@ export function OrdersPanel({
         <div className="space-y-2">
           {orders.map((o) => (
             <div key={o.id} className="flex items-center justify-between rounded-2xl border border-line bg-surface/40 px-4 py-3 text-sm">
-              <div>
-                <div className="font-medium">{o.buyer_email}</div>
-                <div className="text-xs text-muted">{new Date(o.created_at).toLocaleDateString("es-MX")}</div>
+              <div className="min-w-0">
+                <div className="font-medium">{o.buyer_name || o.buyer_email}</div>
+                <div className="truncate text-xs text-muted">
+                  {o.buyer_email}
+                  {(o.buyer_city || o.buyer_country) && ` · ${[o.buyer_city, o.buyer_country].filter(Boolean).join(", ")}`}
+                  {o.buyer_phone && ` · 📱 ${o.buyer_phone}`}
+                </div>
+                <div className="text-[11px] text-muted/70">{new Date(o.created_at).toLocaleDateString("es-MX")}</div>
               </div>
               <div className="flex items-center gap-4">
                 <span className="text-gold">{money(o.total_cents, currency)}</span>

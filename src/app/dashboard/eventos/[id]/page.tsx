@@ -53,7 +53,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: orders } = await db
     .from("orders")
-    .select("id, buyer_email, total_cents, status, created_at")
+    .select("id, buyer_email, buyer_name, buyer_phone, buyer_city, buyer_country, total_cents, status, created_at")
     .eq("event_id", id)
     .order("created_at", { ascending: false })
     .returns<OrderRow[]>();
