@@ -36,8 +36,14 @@ function LoginInner() {
   }
 
   return (
-    <main className="aurora relative grid min-h-screen place-items-center px-6">
-      <div className="glass relative z-10 w-full max-w-sm rounded-3xl p-8">
+    <main className="relative grid min-h-screen place-items-center overflow-hidden px-6 py-10">
+      {/* Fondo: estadio lleno (responsivo, sin deformar) + overlay para legibilidad */}
+      <div aria-hidden className="absolute inset-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img src="/login-bg.jpg" alt="" className="h-full w-full object-cover object-center" />
+        <div className="absolute inset-0 bg-gradient-to-b from-ink/75 via-ink/65 to-ink/90" />
+      </div>
+      <div className="glass relative z-10 w-full max-w-sm rounded-3xl p-8 shadow-2xl shadow-black/50">
         <div className="mb-6 flex flex-col items-center gap-3">
           <img src="/logo-mark.png" alt="ShaarPass" className="h-20 w-20 rounded-2xl shadow-lg shadow-fuchsia/20" />
           <span className="font-display text-2xl font-bold tracking-tight">ShaarPass</span>
