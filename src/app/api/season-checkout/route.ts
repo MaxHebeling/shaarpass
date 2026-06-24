@@ -18,6 +18,9 @@ export async function POST(req: Request) {
   const { seasonId, buyerEmail, idempotencyKey } = parsed.data;
 
   const db = createAdminClient();
+  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `season-checkout:${ip}`, p_max: 20, p_window_seconds: 60 });
+  if (rlOk === false) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429 });
 
   // Reusa una orden previa con la misma idempotency (reintentos del cliente).
   const { data: prior } = await db

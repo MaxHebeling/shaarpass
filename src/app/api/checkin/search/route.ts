@@ -17,7 +17,11 @@ export async function GET(req: Request) {
   if (!sess || sess.revoked || sess.expired) return NextResponse.json({ error: "sesión inválida" }, { status: 403 });
   const eventId = sess.event_id;
 
-  const like = `%${q.replace(/[%_]/g, "")}%`;
+  // Sanea caracteres con significado en PostgREST `.or()` ( , ( ) . * ) además de los
+  // comodines ilike ( % _ ) → evita inyección de filtros en la búsqueda.
+  const safe = q.replace(/[%_,().*]/g, "").trim();
+  if (safe.length < 2) return NextResponse.json({ results: [] });
+  const like = `%${safe}%`;
   // Órdenes que coinciden por nombre/correo/teléfono.
   const { data: ords } = await db
     .from("orders")
@@ -33,8 +37,8 @@ export async function GET(req: Request) {
     .select("id, qr_token, status, ticket_types(name), orders(buyer_name, buyer_email)")
     .eq("event_id", eventId)
     .limit(30);
-  if (orderIds.length) query = query.or(`order_id.in.(${orderIds.join(",")}),qr_token.ilike.${q.replace(/[%_]/g, "")}%`);
-  else query = query.ilike("qr_token", `${q.replace(/[%_]/g, "")}%`);
+  if (orderIds.length) query = query.or(`order_id.in.(${orderIds.join(",")}),qr_token.ilike.${safe}%`);
+  else query = query.ilike("qr_token", `${safe}%`);
 
   const { data: tickets } = await query;
   const results = (tickets ?? []).map((t) => {

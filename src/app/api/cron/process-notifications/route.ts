@@ -7,11 +7,10 @@ export const maxDuration = 60;
 
 /** Drena la cola de notificaciones (envío masivo escalable). Protegido con CRON_SECRET. */
 export async function GET(req: Request) {
+  // CRON_SECRET obligatorio: sin él (o sin coincidencia) el endpoint NO se abre.
   const secret = process.env.CRON_SECRET;
-  if (secret) {
-    const auth = req.headers.get("authorization");
-    if (auth !== `Bearer ${secret}`) return NextResponse.json({ error: "no autorizado" }, { status: 401 });
-  }
+  const auth = req.headers.get("authorization");
+  if (!secret || auth !== `Bearer ${secret}`) return NextResponse.json({ error: "no autorizado" }, { status: 401 });
   const db = createAdminClient();
   const { data: jobs } = await db
     .from("notification_jobs")
