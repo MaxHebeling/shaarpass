@@ -14,6 +14,7 @@ import { EventCover } from "@/components/dashboard/EventCover";
 import { EventDetailsEditor } from "@/components/dashboard/EventDetailsEditor";
 import { TicketTypesEditor } from "@/components/dashboard/TicketTypesEditor";
 import { EventStats, type DayPoint } from "@/components/dashboard/EventStats";
+import { StaffPanel, type StaffRow } from "@/components/dashboard/StaffPanel";
 
 export const dynamic = "force-dynamic";
 
@@ -109,6 +110,10 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     series.push({ label: k, cents: byDay.get(k) ?? 0 });
   }
 
+  const { data: staffRows } = await db.from("event_staff")
+    .select("id, name, gate, role, token, revoked, scans_count, last_active_at")
+    .eq("event_id", id).order("created_at").returns<StaffRow[]>();
+
   const { data: buyerRows } = await db.from("orders").select("buyer_email").eq("event_id", id).eq("status", "paid");
   const buyersCount = new Set((buyerRows ?? []).map((o) => o.buyer_email)).size;
   const { count: waitlistCount } = await db.from("waitlist").select("id", { count: "exact", head: true }).eq("event_id", id);
@@ -161,6 +166,11 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
         <TicketTypesEditor eventId={id} currency={event.currency} initial={(types ?? []).map((t) => ({
           id: t.id, name: t.name, price_cents: t.price_cents, quantity_total: t.quantity_total, quantity_sold: t.quantity_sold,
         }))} />
+      </div>
+
+      {/* Equipo de Recepción (staff de check-in) */}
+      <div className="mb-6">
+        <StaffPanel eventId={id} eventTitle={event.title} initial={staffRows ?? []} />
       </div>
 
       {/* Órdenes + reembolsos + cancelar evento */}

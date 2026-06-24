@@ -495,3 +495,43 @@ export async function signOut() {
   await db.auth.signOut();
   redirect("/login");
 }
+
+// --- Equipo de Recepción (staff de check-in) ---
+
+function staffToken() {
+  return (crypto.randomUUID() + crypto.randomUUID()).replace(/-/g, "");
+}
+
+export async function addCheckinStaff(form: { eventId: string; name: string; gate?: string; expiresAt?: string | null }) {
+  const db = await createClient();
+  if (!form.name.trim()) return { error: "El nombre es obligatorio" };
+  const { data: { user } } = await db.auth.getUser();
+  // RLS event_staff_org: solo un miembro de la org puede insertar.
+  const { data, error } = await db.from("event_staff").insert({
+    event_id: form.eventId,
+    name: form.name.trim(),
+    gate: form.gate?.trim() || null,
+    token: staffToken(),
+    expires_at: form.expiresAt || null,
+    created_by: user?.id ?? null,
+  }).select("id, token").single();
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true, id: data.id, token: data.token };
+}
+
+export async function revokeCheckinStaff(form: { staffId: string; eventId: string; revoked: boolean }) {
+  const db = await createClient();
+  const { error } = await db.from("event_staff").update({ revoked: form.revoked }).eq("id", form.staffId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+export async function removeCheckinStaff(form: { staffId: string; eventId: string }) {
+  const db = await createClient();
+  const { error } = await db.from("event_staff").delete().eq("id", form.staffId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
