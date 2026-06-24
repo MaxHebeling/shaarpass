@@ -68,7 +68,7 @@ export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: strin
                   <button
                     onClick={() => set(t.id, -1, cap)}
                     disabled={n === 0}
-                    className="grid h-9 w-9 place-items-center rounded-full border border-line text-fg transition hover:border-white/30 disabled:opacity-30"
+                    className="grid h-11 w-11 place-items-center rounded-full border border-line text-fg transition hover:border-white/30 disabled:opacity-30"
                     aria-label="Quitar"
                   >
                     <Minus className="h-4 w-4" />
@@ -77,7 +77,7 @@ export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: strin
                   <button
                     onClick={() => set(t.id, 1, cap)}
                     disabled={sold || n >= cap}
-                    className="brand-gradient grid h-9 w-9 place-items-center rounded-full text-ink transition hover:scale-105 disabled:opacity-30 disabled:hover:scale-100"
+                    className="brand-gradient grid h-11 w-11 place-items-center rounded-full text-ink transition hover:scale-105 disabled:opacity-30 disabled:hover:scale-100"
                     aria-label="Agregar"
                   >
                     <Plus className="h-4 w-4" />

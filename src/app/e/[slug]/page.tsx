@@ -216,7 +216,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
               {event.category}
             </span>
           )}
-          <h1 className="font-display text-4xl font-bold leading-tight tracking-tight md:text-6xl">
+          <h1 className="font-display text-3xl font-bold leading-tight tracking-tight sm:text-4xl md:text-6xl">
             {event.title}
           </h1>
           {event.organizations?.name && (
@@ -242,7 +242,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             </div>
           )}
 
-          <button className="mt-8 flex items-center gap-2 text-sm text-muted transition hover:text-fg">
+          <button className="-mx-2 mt-8 flex items-center gap-2 rounded-lg px-2 py-2 text-sm text-muted transition hover:text-fg">
             <Share2 className="h-4 w-4" /> Compartir evento
           </button>
         </div>
