@@ -16,7 +16,9 @@ interface EventAgg {
   cover_image: string | null;
 }
 
-export default async function DashboardPage() {
+export default async function DashboardPage({ searchParams }: { searchParams: Promise<{ onboarding?: string }> }) {
+  const { onboarding } = await searchParams;
+  const forceOnboarding = onboarding === "1"; // vista previa: /dashboard?onboarding=1
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
 
@@ -94,7 +96,7 @@ export default async function DashboardPage() {
         </Link>
       </div>
 
-      {!onboarded && (
+      {(!onboarded || forceOnboarding) && (
         <OnboardingChecklist
           hasEvent={hasEvent} hasTickets={hasTickets} hasCover={hasCover}
           payoutsEnabled={payoutsEnabled} hasPublished={hasPublished} manageHref={manageHref}
