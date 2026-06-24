@@ -10,6 +10,9 @@ import { faqs } from "@/components/landing/faq-data";
 import { LeadCapture } from "@/components/landing/LeadCapture";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
+import type { Metadata } from "next";
+
+export const metadata: Metadata = { alternates: { canonical: "/" } };
 
 const SITE = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
 

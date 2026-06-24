@@ -29,12 +29,20 @@ export async function generateMetadata({ params }: { params: Promise<{ slug: str
   // White-label: la marca en el título es la del organizador, no ShaarPass.
   const brand = e.organizations?.white_label ? (e.organizations?.name ?? "") : "ShaarPass";
   const title = `${e.title}${place ? ` · ${place}` : ""}${brand ? ` | ${brand}` : ""}`;
-  const description = (e.description ?? `Compra boletos para ${e.title}.`).slice(0, 160);
+  // `??` no atrapa "" (cadena vacía): usamos truthy + limpieza para evitar
+  // descripciones vacías cuando el organizador no llenó el campo.
+  const clean = e.description?.replace(/\s+/g, " ").trim();
+  const description = (clean && clean.length > 0
+    ? clean
+    : `Boletos para ${e.title}${place ? ` en ${place}` : ""}. Asegura tu lugar — pago seguro y QR al instante con ShaarPass.`
+  ).slice(0, 160);
+  const images = e.cover_image ? [e.cover_image] : ["/og.jpg"];
   return {
     title,
     description,
     alternates: { canonical: `/e/${slug}` },
-    openGraph: { title, description, images: e.cover_image ? [e.cover_image] : undefined, type: "website" },
+    openGraph: { title, description, images, type: "website" },
+    twitter: { card: "summary_large_image", title, description, images },
   };
 }
 
