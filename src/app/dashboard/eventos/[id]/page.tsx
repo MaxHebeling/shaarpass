@@ -146,7 +146,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   // Campañas + datos para segmentación.
   const { data: campaignRowsAll } = await db.from("campaigns")
-    .select("id, name, subject, status, scheduled_at, recipients_count, sent_count, created_at, kind, automation_key")
+    .select("id, name, subject, status, scheduled_at, recipients_count, sent_count, delivered_count, opened_count, clicked_count, bounced_count, unsub_count, created_at, kind, automation_key")
     .eq("event_id", id).order("created_at", { ascending: false })
     .returns<(CampaignRow & { kind: string; automation_key: string | null })[]>();
   const campaignRows: CampaignRow[] = (campaignRowsAll ?? []).filter((c) => c.kind !== "automation");

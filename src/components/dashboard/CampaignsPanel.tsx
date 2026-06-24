@@ -3,13 +3,15 @@
 import { useMemo, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Mail, Send, Clock, Loader2, Plus, Trash2, Monitor, Smartphone, Users, Check } from "lucide-react";
-import { sendCampaign2, scheduleCampaign, sendTestCampaign, deleteCampaign, type CampaignForm } from "@/app/dashboard/actions";
+import { sendCampaign2, scheduleCampaign, sendTestCampaign, deleteCampaign, getCampaignCountryMetrics, type CampaignForm } from "@/app/dashboard/actions";
+import { ChevronDown, Globe } from "lucide-react";
 import { wallTimeToISO, EVENT_TIMEZONES } from "@/lib/datetime";
 import type { Segment } from "@/lib/email/campaignSend";
 
 export interface CampaignRow {
   id: string; name: string; subject: string; status: string;
   scheduled_at: string | null; recipients_count: number; sent_count: number; created_at: string;
+  delivered_count?: number; opened_count?: number; clicked_count?: number; bounced_count?: number; unsub_count?: number;
 }
 interface TT { id: string; name: string; }
 
@@ -51,23 +53,26 @@ export function CampaignsPanel({ eventId, defaultTz, ticketTypes, countries, reg
         ) : (
           <div className="space-y-2">
             {campaigns.map((c) => (
-              <div key={c.id} className="flex items-center justify-between gap-3 rounded-2xl border border-line bg-surface/40 px-4 py-3">
-                <div className="min-w-0">
-                  <div className="truncate text-sm font-medium">{c.name}</div>
-                  <div className="truncate text-xs text-muted">{c.subject}</div>
-                  <div className="mt-0.5 text-[11px] text-muted/70">
-                    {c.status === "sent" ? `Enviada · ${c.sent_count}/${c.recipients_count}` :
-                     c.status === "scheduled" ? `Programada · ${c.scheduled_at ? new Date(c.scheduled_at).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}` :
-                     c.status === "sending" ? "Enviando…" : c.status === "failed" ? "Falló" : "Borrador"}
+              <div key={c.id} className="rounded-2xl border border-line bg-surface/40 px-4 py-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="truncate text-sm font-medium">{c.name}</div>
+                    <div className="truncate text-xs text-muted">{c.subject}</div>
+                    <div className="mt-0.5 text-[11px] text-muted/70">
+                      {c.status === "sent" ? `Enviada · ${c.sent_count}/${c.recipients_count}` :
+                       c.status === "scheduled" ? `Programada · ${c.scheduled_at ? new Date(c.scheduled_at).toLocaleString("es-MX", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" }) : ""}` :
+                       c.status === "sending" ? "Enviando…" : c.status === "failed" ? "Falló" : "Borrador"}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <CampaignStatus status={c.status} />
+                    <button onClick={async () => { if (confirm(`¿Eliminar la campaña "${c.name}"?`)) { await deleteCampaign({ id: c.id, eventId }); setCampaigns((a) => a.filter((x) => x.id !== c.id)); router.refresh(); } }}
+                      aria-label="Eliminar" className="grid h-8 w-8 place-items-center rounded-lg border border-line text-muted transition hover:border-rose-500/50 hover:text-rose-400">
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </button>
                   </div>
                 </div>
-                <div className="flex items-center gap-2">
-                  <CampaignStatus status={c.status} />
-                  <button onClick={async () => { if (confirm(`¿Eliminar la campaña "${c.name}"?`)) { await deleteCampaign({ id: c.id, eventId }); setCampaigns((a) => a.filter((x) => x.id !== c.id)); router.refresh(); } }}
-                    aria-label="Eliminar" className="grid h-8 w-8 place-items-center rounded-lg border border-line text-muted transition hover:border-rose-500/50 hover:text-rose-400">
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </button>
-                </div>
+                {c.status === "sent" && <CampaignMetrics c={c} />}
               </div>
             ))}
           </div>
@@ -276,6 +281,62 @@ function Chip({ on, onClick, children }: { on: boolean; onClick: () => void; chi
     <button onClick={onClick} className={`flex items-center gap-1 rounded-full px-2.5 py-1 text-xs transition ${on ? "bg-fuchsia/15 text-fuchsia" : "border border-line text-muted hover:text-fg"}`}>
       {on && <Check className="h-3 w-3" />}{children}
     </button>
+  );
+}
+
+function CampaignMetrics({ c }: { c: CampaignRow }) {
+  const [open, setOpen] = useState(false);
+  const [rows, setRows] = useState<{ country: string; total: number; delivered: number; opened: number; clicked: number }[] | null>(null);
+  const [loading, setLoading] = useState(false);
+  const delivered = c.delivered_count ?? 0, opened = c.opened_count ?? 0, clicked = c.clicked_count ?? 0;
+  const bounced = c.bounced_count ?? 0, unsub = c.unsub_count ?? 0;
+  const rate = (n: number) => (delivered > 0 ? Math.round((n / delivered) * 100) : 0);
+  const noTracking = delivered === 0 && (c.sent_count ?? 0) > 0;
+
+  async function loadCountries() {
+    setOpen((o) => !o);
+    if (rows || loading) return;
+    setLoading(true);
+    const res = await getCampaignCountryMetrics(c.id);
+    setLoading(false);
+    if (!("error" in res) && res.rows) setRows(res.rows);
+  }
+
+  return (
+    <div className="mt-3 border-t border-line pt-3">
+      <div className="grid grid-cols-3 gap-2 sm:grid-cols-5">
+        <Metric label="Entregados" value={String(delivered)} />
+        <Metric label="Abiertos" value={`${rate(opened)}%`} sub={String(opened)} />
+        <Metric label="Clics" value={`${rate(clicked)}%`} sub={String(clicked)} />
+        <Metric label="Rebotes" value={String(bounced)} />
+        <Metric label="Bajas" value={String(unsub)} />
+      </div>
+      {noTracking && <p className="mt-2 text-[11px] text-muted/70">Activa el webhook de Resend para ver aperturas y clics (entregados/rebotes en tiempo real).</p>}
+      <button onClick={loadCountries} className="mt-2 flex items-center gap-1 text-[11px] text-muted transition hover:text-fg">
+        <Globe className="h-3 w-3" /> Por país <ChevronDown className={`h-3 w-3 transition ${open ? "rotate-180" : ""}`} />
+      </button>
+      {open && (
+        <div className="mt-2 space-y-1">
+          {loading ? <Loader2 className="h-4 w-4 animate-spin text-muted" /> :
+            (rows ?? []).length === 0 ? <p className="text-[11px] text-muted">Sin datos.</p> :
+            (rows ?? []).map((r) => (
+              <div key={r.country} className="flex items-center justify-between text-[11px]">
+                <span>{r.country}</span>
+                <span className="text-muted">{r.total} env · {r.delivered ? Math.round((r.opened / r.delivered) * 100) : 0}% ab · {r.clicked} clics</span>
+              </div>
+            ))}
+        </div>
+      )}
+    </div>
+  );
+}
+
+function Metric({ label, value, sub }: { label: string; value: string; sub?: string }) {
+  return (
+    <div className="rounded-lg bg-surface/40 px-2 py-1.5 text-center">
+      <div className="font-display text-base font-bold tabular-nums">{value}</div>
+      <div className="text-[10px] text-muted">{label}{sub ? ` · ${sub}` : ""}</div>
+    </div>
   );
 }
 

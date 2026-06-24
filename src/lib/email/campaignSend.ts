@@ -155,6 +155,7 @@ export async function sendCampaignNow(db: SupabaseClient, campaignId: string): P
   const from = claimed.from_name ? `${claimed.from_name} <${addr}>` : fromEnv;
 
   let sent = 0;
+  const rows: { campaign_id: string; email: string; country: string; ticket_type: string; resend_id: string | null }[] = [];
   for (let i = 0; i < recipients.length; i += 20) {
     const batch = recipients.slice(i, i + 20);
     await Promise.all(batch.map(async (r) => {
@@ -165,15 +166,20 @@ export async function sendCampaignNow(db: SupabaseClient, campaignId: string): P
         bodyHtml: fillVars(claimed.body_html ?? "", r, { name: eventName, date: eventDate }), unsubUrl: unsub,
       });
       try {
-        await resend.emails.send({
+        const { data } = await resend.emails.send({
           from, to: r.email, subject, html,
           replyTo: claimed.reply_to || undefined,
           headers: { "List-Unsubscribe": `<${unsub}>` },
+          tags: [{ name: "campaign_id", value: campaignId }],
         });
         sent++;
+        rows.push({ campaign_id: campaignId, email: r.email, country: r.country, ticket_type: r.ticketType, resend_id: data?.id ?? null });
       } catch (e) { console.error("[campaign] fallo a", r.email, (e as Error).message); }
     }));
   }
+
+  // Registra los destinatarios para el tracking de aperturas/clics (webhook Resend).
+  if (rows.length) await db.from("campaign_emails").upsert(rows, { onConflict: "campaign_id,email" });
 
   await db.from("campaigns").update({ status: "sent", recipients_count: recipients.length, sent_count: sent, sent_at: new Date().toISOString() }).eq("id", campaignId);
   return { sent, recipients: recipients.length };

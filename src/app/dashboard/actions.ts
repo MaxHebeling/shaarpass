@@ -587,6 +587,22 @@ export async function sendTestCampaign(form: { eventId: string; to: string; subj
   return { ok: true };
 }
 
+export async function getCampaignCountryMetrics(campaignId: string) {
+  const db = await createClient();
+  // RLS campaign_emails_read garantiza que solo la org del evento ve estos datos.
+  const { data, error } = await db.from("campaign_emails")
+    .select("country, delivered, opened, clicked").eq("campaign_id", campaignId);
+  if (error) return { error: error.message };
+  const map = new Map<string, { total: number; delivered: number; opened: number; clicked: number }>();
+  for (const r of data ?? []) {
+    const c = r.country || "—";
+    const m = map.get(c) ?? { total: 0, delivered: 0, opened: 0, clicked: 0 };
+    m.total++; if (r.delivered) m.delivered++; if (r.opened) m.opened++; if (r.clicked) m.clicked++;
+    map.set(c, m);
+  }
+  return { rows: [...map.entries()].map(([country, m]) => ({ country, ...m })).sort((a, b) => b.total - a.total) };
+}
+
 export async function toggleAutomation(form: { eventId: string; key: string; enabled: boolean }) {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
