@@ -238,7 +238,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           {event.description && (
             <div className="mt-10">
               <h2 className="font-display text-2xl font-semibold">Sobre el evento</h2>
-              <p className="mt-3 whitespace-pre-line leading-relaxed text-muted">{event.description}</p>
+              <EventDescription text={event.description} />
             </div>
           )}
 
@@ -292,6 +292,44 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 function minPrice(tickets: SelectableTicket[]) {
   const min = tickets.reduce((m, t) => Math.min(m, t.price_cents), Infinity);
   return (min / 100).toLocaleString("es-MX", { style: "currency", currency: tickets[0].currency.toUpperCase() });
+}
+
+/**
+ * Descripción del evento con presentación editorial: párrafos justificados,
+ * detección de listas (viñetas y numeradas), medida de lectura óptima.
+ * El organizador escribe texto plano; aquí lo estructuramos.
+ */
+function EventDescription({ text }: { text: string }) {
+  const BULLET = /^\s*[-–•*]\s+/;
+  const NUMBER = /^\s*\d+[.)]\s+/;
+  const blocks = text.replace(/\r\n/g, "\n").split(/\n\s*\n/).map((b) => b.trim()).filter(Boolean);
+
+  return (
+    <div className="mt-4 max-w-[68ch] space-y-4 text-[15px] leading-relaxed text-muted md:text-base md:leading-[1.75]">
+      {blocks.map((block, i) => {
+        const lines = block.split("\n").map((l) => l.trim()).filter(Boolean);
+        const isBullet = lines.length > 0 && lines.every((l) => BULLET.test(l));
+        const isNumber = lines.length > 0 && lines.every((l) => NUMBER.test(l));
+
+        if (isBullet || isNumber) {
+          const items = lines.map((l) => l.replace(isBullet ? BULLET : NUMBER, ""));
+          const cls = "space-y-1.5 pl-5 text-left marker:text-gold " + (isNumber ? "list-decimal" : "list-disc");
+          return isNumber ? (
+            <ol key={i} className={cls}>{items.map((it, j) => <li key={j} className="pl-1">{it}</li>)}</ol>
+          ) : (
+            <ul key={i} className={cls}>{items.map((it, j) => <li key={j} className="pl-1">{it}</li>)}</ul>
+          );
+        }
+        // Párrafo: une saltos simples en un espacio para un justificado limpio,
+        // sin palabras cortadas (hyphens-none) ni desbordes (break-word).
+        return (
+          <p key={i} className="break-words text-justify hyphens-none [text-wrap:pretty]">
+            {lines.join(" ")}
+          </p>
+        );
+      })}
+    </div>
+  );
 }
 
 function InfoCard({ icon: Icon, title, lines }: { icon: typeof Calendar; title: string; lines: string[] }) {
