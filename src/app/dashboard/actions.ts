@@ -587,6 +587,33 @@ export async function sendTestCampaign(form: { eventId: string; to: string; subj
   return { ok: true };
 }
 
+export async function toggleAutomation(form: { eventId: string; key: string; enabled: boolean }) {
+  const db = await createClient();
+  const { data: { user } } = await db.auth.getUser();
+  if (!form.enabled) {
+    const { error } = await db.from("campaigns").delete().eq("event_id", form.eventId).eq("automation_key", form.key);
+    if (error) return { error: error.message };
+    revalidatePath(`/dashboard/eventos/${form.eventId}`);
+    return { ok: true };
+  }
+  const { automationDef, automationScheduledAt } = await import("@/lib/email/automations");
+  const def = automationDef(form.key);
+  if (!def) return { error: "Automatización desconocida" };
+  const { data: ev } = await db.from("events").select("starts_at, ends_at").eq("id", form.eventId).maybeSingle();
+  if (!ev) return { error: "Evento no encontrado" };
+  const scheduledAt = automationScheduledAt(def, ev.starts_at, ev.ends_at);
+  if (new Date(scheduledAt).getTime() <= Date.now()) return { error: "Esa fecha ya pasó para este evento" };
+  // Upsert por (event_id, automation_key) — índice único evita duplicados.
+  const { error } = await db.from("campaigns").upsert({
+    event_id: form.eventId, kind: "automation", automation_key: form.key,
+    name: def.label, subject: def.subject, body_html: def.body, segment: { type: "all" },
+    status: "scheduled", scheduled_at: scheduledAt, created_by: user?.id ?? null,
+  }, { onConflict: "event_id,automation_key" });
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true, scheduledAt };
+}
+
 export async function deleteCampaign(form: { id: string; eventId: string }) {
   const db = await createClient();
   const { error } = await db.from("campaigns").delete().eq("id", form.id);

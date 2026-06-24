@@ -9,6 +9,7 @@ import { SeatBuilder, type TierOption } from "@/components/dashboard/SeatBuilder
 import { EventVenueMap, type PublishedMap, type ZonePrice } from "@/components/dashboard/EventVenueMap";
 import { ServicesManager, type ServiceRow } from "@/components/dashboard/ServicesManager";
 import { CampaignsPanel, type CampaignRow } from "@/components/dashboard/CampaignsPanel";
+import { AutomationsPanel, type AutoState } from "@/components/dashboard/AutomationsPanel";
 import { QueueControl } from "@/components/dashboard/QueueControl";
 import { PresaleControl } from "@/components/dashboard/PresaleControl";
 import { EventCover } from "@/components/dashboard/EventCover";
@@ -144,9 +145,13 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
   }));
 
   // Campañas + datos para segmentación.
-  const { data: campaignRows } = await db.from("campaigns")
-    .select("id, name, subject, status, scheduled_at, recipients_count, sent_count, created_at")
-    .eq("event_id", id).order("created_at", { ascending: false }).returns<CampaignRow[]>();
+  const { data: campaignRowsAll } = await db.from("campaigns")
+    .select("id, name, subject, status, scheduled_at, recipients_count, sent_count, created_at, kind, automation_key")
+    .eq("event_id", id).order("created_at", { ascending: false })
+    .returns<(CampaignRow & { kind: string; automation_key: string | null })[]>();
+  const campaignRows: CampaignRow[] = (campaignRowsAll ?? []).filter((c) => c.kind !== "automation");
+  const autoEnabled: Record<string, AutoState> = {};
+  for (const c of campaignRowsAll ?? []) if (c.kind === "automation" && c.automation_key) autoEnabled[c.automation_key] = { scheduledAt: c.scheduled_at, status: c.status };
   const { data: regRows } = await db.from("orders").select("buyer_email, buyer_name, buyer_country").eq("event_id", id).eq("status", "paid");
   const countryOptions = [...new Set((regRows ?? []).map((r) => r.buyer_country).filter(Boolean) as string[])];
   const regMap = new Map<string, { email: string; name: string }>();
@@ -254,7 +259,12 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
           },
           {
             id: "marketing", label: "Marketing", icon: <Megaphone className="h-4 w-4" />,
-            content: <CampaignsPanel eventId={id} defaultTz={event.timezone} ticketTypes={(types ?? []).map((t) => ({ id: t.id, name: t.name }))} countries={countryOptions} registrants={registrants} initial={campaignRows ?? []} />,
+            content: (
+              <>
+                <AutomationsPanel eventId={id} startsAt={event.starts_at} endsAt={event.ends_at} enabled={autoEnabled} />
+                <CampaignsPanel eventId={id} defaultTz={event.timezone} ticketTypes={(types ?? []).map((t) => ({ id: t.id, name: t.name }))} countries={countryOptions} registrants={registrants} initial={campaignRows ?? []} />
+              </>
+            ),
           },
         ]}
       />
