@@ -8,6 +8,22 @@ import { CURRENCIES } from "@/lib/currencies";
 const field = "w-full rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-sm outline-none transition focus:border-fuchsia/60";
 const label = "mb-1.5 block text-xs text-muted";
 
+/** Convierte una hora de pared (fecha+hora) en la zona del evento a UTC ISO,
+ *  sin importar la zona del navegador de quien crea el evento. */
+function wallTimeToISO(dateStr: string, timeStr: string, tz: string): string {
+  const naiveUTC = Date.parse(`${dateStr}T${timeStr}:00Z`); // la hora de pared como si fuera UTC
+  const d = new Date(naiveUTC);
+  const dtf = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, hourCycle: "h23",
+    year: "numeric", month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit", second: "2-digit",
+  });
+  const m: Record<string, string> = {};
+  for (const p of dtf.formatToParts(d)) m[p.type] = p.value;
+  const asUTC = Date.UTC(+m.year, +m.month - 1, +m.day, +m.hour, +m.minute, +m.second);
+  const offset = asUTC - d.getTime(); // cuánto difiere la zona del evento respecto a UTC
+  return new Date(naiveUTC - offset).toISOString();
+}
+
 export default function NewEventPage() {
   const [tickets, setTickets] = useState<TicketTypeInput[]>([{ name: "General", price: 250, quantity: 100 }]);
   const [publish, setPublish] = useState(true);
@@ -22,6 +38,7 @@ export default function NewEventPage() {
     e.preventDefault();
     setError(null);
     const f = new FormData(e.currentTarget);
+    const tz = String(f.get("timezone") || "America/Mexico_City");
     start(async () => {
       const res = await createEvent({
         title: String(f.get("title")),
@@ -30,9 +47,9 @@ export default function NewEventPage() {
         city: String(f.get("city")),
         region: String(f.get("region")),
         venueName: String(f.get("venueName")),
-        startsAt: new Date(String(f.get("startsAt"))).toISOString(),
-        endsAt: new Date(String(f.get("endsAt"))).toISOString(),
-        timezone: "America/Tijuana",
+        startsAt: wallTimeToISO(String(f.get("startsDate")), String(f.get("startsTime")), tz),
+        endsAt: wallTimeToISO(String(f.get("endsDate")), String(f.get("endsTime")), tz),
+        timezone: tz,
         currency: String(f.get("currency")),
         orgName: String(f.get("orgName")),
         publish,
@@ -74,11 +91,17 @@ export default function NewEventPage() {
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className={label}>Inicia *</label>
-              <input name="startsAt" type="datetime-local" required className={field} />
+              <div className="grid grid-cols-2 gap-2">
+                <input name="startsDate" type="date" required className={field} />
+                <input name="startsTime" type="time" required defaultValue="18:00" className={field} />
+              </div>
             </div>
             <div>
               <label className={label}>Termina *</label>
-              <input name="endsAt" type="datetime-local" required className={field} />
+              <div className="grid grid-cols-2 gap-2">
+                <input name="endsDate" type="date" required className={field} />
+                <input name="endsTime" type="time" required defaultValue="21:00" className={field} />
+              </div>
             </div>
           </div>
           <div>
@@ -100,6 +123,23 @@ export default function NewEventPage() {
                 {CURRENCIES.map((c) => <option key={c.code} value={c.code}>{c.label}</option>)}
               </select>
             </div>
+          </div>
+          <div>
+            <label className={label}>Zona horaria del evento</label>
+            <select name="timezone" defaultValue="America/Mexico_City" className={field}>
+              <option value="America/Mexico_City">México (CDMX / centro)</option>
+              <option value="America/Tijuana">Tijuana / Baja California</option>
+              <option value="America/Monterrey">Monterrey</option>
+              <option value="America/Cancun">Cancún / Quintana Roo</option>
+              <option value="America/Argentina/Buenos_Aires">Argentina</option>
+              <option value="America/Bogota">Colombia</option>
+              <option value="America/Lima">Perú</option>
+              <option value="America/Santiago">Chile</option>
+              <option value="America/Guatemala">Guatemala / Centroamérica</option>
+              <option value="America/Los_Angeles">EE.UU. — Pacífico (San Diego)</option>
+              <option value="America/New_York">EE.UU. — Este</option>
+              <option value="Europe/Madrid">España</option>
+            </select>
           </div>
         </Section>
 
