@@ -2,9 +2,8 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
-import { MapEditor, type EditorZone, type EditorSeat } from "@/components/dashboard/MapEditor";
-import { AutoVenueAI } from "@/components/dashboard/AutoVenueAI";
-import { VenueViewer } from "@/components/dashboard/VenueViewer";
+import { type EditorZone, type EditorSeat } from "@/components/dashboard/MapEditor";
+import { RecintoStudio } from "@/components/dashboard/RecintoStudio";
 
 export const dynamic = "force-dynamic";
 
@@ -44,7 +43,7 @@ export default async function MapEditorPage({ params }: { params: Promise<{ mapI
   }));
 
   return (
-    <div className="mx-auto max-w-6xl">
+    <div className="mx-auto max-w-7xl">
       <Link href="/dashboard/recintos" className="mb-4 flex items-center gap-2 text-sm text-muted transition hover:text-fg">
         <ArrowLeft className="h-4 w-4" /> Recintos
       </Link>
@@ -52,19 +51,17 @@ export default async function MapEditorPage({ params }: { params: Promise<{ mapI
         <h1 className="font-display text-2xl font-bold">{map.venues_v2?.name ?? "Recinto"}</h1>
         <p className="text-sm text-muted">{map.name} · {map.width_m}×{map.height_m} m</p>
       </div>
-      <AutoVenueAI mapId={map.id} defaultWidth={Number(map.width_m)} defaultHeight={Number(map.height_m)} backgroundUrl={map.background_url} />
 
-      <MapEditor
+      <RecintoStudio
         mapId={map.id}
+        name={map.venues_v2?.name ?? "Recinto"}
         widthM={Number(map.width_m)}
         heightM={Number(map.height_m)}
         status={map.status}
         backgroundUrl={map.background_url}
-        initialZones={zones}
-        initialSeats={seats}
+        zones={zones}
+        seats={seats}
       />
-
-      <VenueViewer name={map.venues_v2?.name ?? "Recinto"} widthM={Number(map.width_m)} heightM={Number(map.height_m)} zones={zones} seats={seats} />
     </div>
   );
 }
