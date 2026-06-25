@@ -16,6 +16,7 @@
     "@supabase/ssr": "^0.5.2",
     "@supabase/supabase-js": "^2.45.4",
     "@tailwindcss/postcss": "^4.3.0",
+    "@types/three": "^0.184.1",
     "@upstash/redis": "^1.38.0",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^2.0.0",
@@ -30,6 +31,7 @@
     "resend": "^4.0.1",
     "stripe": "^17.4.0",
     "tailwindcss": "^4.3.0",
+    "three": "^0.184.0",
     "zod": "^3.24.1"
   },
   "devDependencies": {

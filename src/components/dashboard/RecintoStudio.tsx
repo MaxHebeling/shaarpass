@@ -10,6 +10,8 @@ import { createClient } from "@/lib/supabase/browser";
 import { setMapBackground, autoGenerateLayout, saveZone, publishMap } from "@/app/dashboard/recintos/actions";
 import { MapEditor, type EditorZone, type EditorSeat } from "@/components/dashboard/MapEditor";
 import { VenueViewer } from "@/components/dashboard/VenueViewer";
+import { VenueModel3D } from "@/components/dashboard/VenueModel3D";
+import { capacityMatrix } from "@/lib/venue/capacity";
 
 type Step = "upload" | "analyzing" | "studio";
 interface Analysis { shapeNotes?: string; stageSide?: string; blockedAreas?: string[]; suggestedPerRow?: number; centralAisle?: boolean; lateralAisles?: boolean; estimatedCapacity?: number; zones?: string[]; recommendations?: string[]; }
@@ -51,6 +53,11 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
   const [rowGap, setRowGap] = useState("0.9");
   const [centralAisle, setCentralAisle] = useState(true);
   const [lateralAisles, setLateralAisles] = useState(true);
+  // Opción 2: crear por datos (sin foto)
+  const [mode, setMode] = useState<"foto" | "datos">("foto");
+  const [shape, setShape] = useState("Rectangular");
+  const [columns, setColumns] = useState("0");
+  const [stageSide, setStageSide] = useState("Frente");
 
   const area = (Number(width) || 0) * (Number(length) || 0);
   const capacity = seats.length;
@@ -138,22 +145,49 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
     return (
       <div className="glass ring-grad rounded-3xl p-8">
         <Stepper active={0} />
-        <div className="mx-auto mt-6 max-w-xl text-center">
+        <div className="mx-auto mt-6 max-w-2xl text-center">
           <h2 className="font-display text-2xl font-bold">Crea tu recinto con IA</h2>
-          <p className="mt-2 text-sm text-muted">Sube una fotografía de tu recinto y la IA analizará automáticamente el espacio para generar un mapa profesional.</p>
-          <label onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) uploadPhoto(f); }}
-            className={`mt-6 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed px-6 py-12 transition ${drag ? "border-fuchsia bg-fuchsia/5" : "border-line hover:border-fuchsia/50"}`}>
-            {bgUrl ? <img src={bgUrl} alt="Recinto" className="max-h-52 rounded-xl object-contain" /> : (
-              <><div className="brand-gradient grid h-14 w-14 place-items-center rounded-2xl text-ink">{uploading ? <Loader2 className="h-7 w-7 animate-spin" /> : <ImageUp className="h-7 w-7" />}</div>
-                <div className="font-medium">{uploading ? "Subiendo…" : "Arrastra una imagen o haz clic"}</div>
-                <div className="text-xs text-muted">JPG · PNG · WEBP</div></>)}
-            <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); }} />
-          </label>
-          {err && <p className="mt-3 text-sm text-fuchsia">{err}</p>}
-          <div className="mt-6 flex justify-center gap-3">
-            <button onClick={() => runAnalyzeAndGenerate(true)} disabled={!bgUrl || pending} className="brand-gradient flex items-center gap-2 rounded-2xl px-6 py-3 font-semibold text-ink disabled:opacity-40"><ScanSearch className="h-4 w-4" /> Analizar con IA</button>
-            <button onClick={() => runAnalyzeAndGenerate(false)} disabled={pending} className="flex items-center gap-2 rounded-2xl border border-line px-6 py-3 text-sm font-medium transition hover:border-white/20">Continuar sin IA <ArrowRight className="h-4 w-4" /></button>
+          <p className="mt-2 text-sm text-muted">Sube una foto del recinto, o créalo solo con sus datos: la IA genera el mapa y un modelo 3D profesional.</p>
+
+          <div className="mx-auto mt-5 flex w-fit rounded-full border border-line p-0.5 text-sm">
+            <button onClick={() => setMode("foto")} className={`rounded-full px-4 py-1.5 transition ${mode === "foto" ? "brand-gradient text-ink" : "text-muted"}`}>Subir foto</button>
+            <button onClick={() => setMode("datos")} className={`rounded-full px-4 py-1.5 transition ${mode === "datos" ? "brand-gradient text-ink" : "text-muted"}`}>Crear sin foto</button>
           </div>
+
+          {mode === "foto" ? (
+            <>
+              <label onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) uploadPhoto(f); }}
+                className={`mt-5 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed px-6 py-12 transition ${drag ? "border-fuchsia bg-fuchsia/5" : "border-line hover:border-fuchsia/50"}`}>
+                {bgUrl ? <img src={bgUrl} alt="Recinto" className="max-h-52 rounded-xl object-contain" /> : (
+                  <><div className="brand-gradient grid h-14 w-14 place-items-center rounded-2xl text-ink">{uploading ? <Loader2 className="h-7 w-7 animate-spin" /> : <ImageUp className="h-7 w-7" />}</div>
+                    <div className="font-medium">{uploading ? "Subiendo…" : "Arrastra una imagen o haz clic"}</div>
+                    <div className="text-xs text-muted">JPG · PNG · WEBP</div></>)}
+                <input type="file" accept="image/jpeg,image/png,image/webp" className="hidden" onChange={(e) => { const f = e.target.files?.[0]; if (f) uploadPhoto(f); }} />
+              </label>
+              {err && <p className="mt-3 text-sm text-fuchsia">{err}</p>}
+              <div className="mt-6 flex justify-center gap-3">
+                <button onClick={() => runAnalyzeAndGenerate(true)} disabled={!bgUrl || pending} className="brand-gradient flex items-center gap-2 rounded-2xl px-6 py-3 font-semibold text-ink disabled:opacity-40"><ScanSearch className="h-4 w-4" /> Analizar con IA</button>
+                <button onClick={() => runAnalyzeAndGenerate(false)} disabled={pending} className="flex items-center gap-2 rounded-2xl border border-line px-6 py-3 text-sm font-medium transition hover:border-white/20">Continuar sin IA <ArrowRight className="h-4 w-4" /></button>
+              </div>
+            </>
+          ) : (
+            <div className="mt-5 text-left">
+              <div className="grid grid-cols-2 gap-3 sm:grid-cols-3">
+                <L label="Tipo de recinto"><select value={eventType} onChange={(e) => setEventType(e.target.value)} className={fld}>{EVENT_TYPES.map((t) => <option key={t}>{t}</option>)}</select></L>
+                <L label="Forma"><select value={shape} onChange={(e) => setShape(e.target.value)} className={fld}>{["Rectangular", "Cuadrada", "En L", "Abanico", "Circular"].map((s) => <option key={s}>{s}</option>)}</select></L>
+                <L label="Escenario"><select value={stageSide} onChange={(e) => setStageSide(e.target.value)} className={fld}>{["Frente", "Centro", "Lateral", "Esquina"].map((s) => <option key={s}>{s}</option>)}</select></L>
+                <L label={`Ancho (${unit})`}><input value={width} onChange={(e) => setWidth(e.target.value)} type="number" className={fld} /></L>
+                <L label={`Largo (${unit})`}><input value={length} onChange={(e) => setLength(e.target.value)} type="number" className={fld} /></L>
+                <L label={`Altura (${unit})`}><input value={height} onChange={(e) => setHeight(e.target.value)} type="number" className={fld} /></L>
+                <L label="Columnas"><input value={columns} onChange={(e) => setColumns(e.target.value)} type="number" className={fld} /></L>
+                <L label="Sillas"><input value={chairs} onChange={(e) => setChairs(e.target.value)} type="number" className={fld} /></L>
+                <L label="Por fila"><input value={perRow} onChange={(e) => setPerRow(e.target.value)} type="number" className={fld} /></L>
+              </div>
+              {err && <p className="mt-3 text-sm text-fuchsia">{err}</p>}
+              <button onClick={() => runAnalyzeAndGenerate(false)} disabled={pending} className="brand-gradient mt-5 flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold text-ink disabled:opacity-50"><Wand2 className="h-4 w-4" /> Generar recinto 3D</button>
+              <p className="mt-2 text-center text-[11px] text-muted">La IA construye el mapa + modelo 3D con muros, escenario, columnas, zonas y distribución según tus datos.</p>
+            </div>
+          )}
         </div>
       </div>
     );
@@ -241,6 +275,18 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
             {analysis?.recommendations?.length ? <ul className="mt-2 space-y-0.5 border-t border-line pt-2 text-[11px] text-muted">{analysis.recommendations.slice(0, 4).map((r, i) => <li key={i}>• {r}</li>)}</ul> : null}
           </Panel>
 
+          <Panel title="Capacidad por tipo">
+            <div className="space-y-1">
+              {capacityMatrix(area).map((c) => (
+                <div key={c.key} className="flex items-center justify-between text-xs">
+                  <span className="text-muted">{c.label}</span>
+                  <span className="font-display font-bold tabular-nums text-fg">{c.people.toLocaleString("es-MX")}</span>
+                </div>
+              ))}
+            </div>
+            <p className="mt-2 text-[10px] text-muted/70">Calculado sobre el área útil ({Math.round(area * 0.65)} {unit}²). Se recalcula al cambiar dimensiones.</p>
+          </Panel>
+
           <Panel title="Acciones rápidas IA">
             <div className="flex flex-wrap gap-1.5">
               {QUICK.map((q) => <button key={q.name} onClick={() => quickAdd(q)} disabled={pending} className="flex items-center gap-1 rounded-lg border border-line px-2 py-1 text-[11px] transition hover:border-fuchsia/50 disabled:opacity-50"><Plus className="h-3 w-3" /> {q.name}</button>)}
@@ -261,7 +307,10 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
         </div>
       </div>
 
-      {/* Vista 2D/3D + exportar */}
+      {/* Modelo 3D WebGL real */}
+      <VenueModel3D widthM={widthM} heightM={heightM} wallHeight={Number(height) || 4} zones={zones} seats={seats} columns={Number(columns) || 0} />
+
+      {/* Vista 2D/3D plano + exportar */}
       <VenueViewer name={name} widthM={widthM} heightM={heightM} zones={zones} seats={seats} />
     </div>
   );
