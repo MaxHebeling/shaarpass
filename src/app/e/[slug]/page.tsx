@@ -209,6 +209,8 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     ],
   };
 
+  const soldOut = tickets.length > 0 && tickets.every((t) => t.remaining <= 0);
+
   return (
     <main className="relative min-h-screen pb-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
@@ -219,6 +221,13 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
           <Image src={event.cover_image} alt={event.title} fill priority className="object-cover" />
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
+        {soldOut && (
+          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+            <div className="w-[160%] -rotate-[14deg] border-y-2 border-white/30 bg-red-600/95 py-3 text-center shadow-2xl">
+              <span className="font-display text-3xl font-black uppercase tracking-[0.3em] text-white drop-shadow-md sm:text-5xl">Sold Out</span>
+            </div>
+          </div>
+        )}
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-6xl px-6 pb-8">
           {event.organizations?.logo_url && (
             <img
