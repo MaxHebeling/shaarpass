@@ -121,6 +121,35 @@ export async function autoGenerateLayout(form: {
   return { ok: true, summary: layout.summary };
 }
 
+export interface AIZone { name: string; kind: string; color: string; x: number; y: number; w: number; h: number; }
+
+/** Materializa un diseño generado por IA: crea zonas (y llena las 'seated' de sillas). */
+export async function materializeAILayout(form: { mapId: string; widthM: number; lengthM: number; zones: AIZone[]; replace: boolean }) {
+  const db = await createClient();
+  const W = Math.max(4, form.widthM), L = Math.max(4, form.lengthM);
+  if (form.replace) {
+    await db.from("venue_maps").update({ width_m: W, height_m: L }).eq("id", form.mapId);
+    const { data: existing } = await db.from("zones").select("id").eq("map_id", form.mapId);
+    for (const z of existing ?? []) await db.rpc("delete_zone", { p_zone: z.id });
+  }
+  const clamp = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, v));
+  const VALID = new Set(["seated", "ga", "table"]);
+  for (const z of form.zones ?? []) {
+    const kind = VALID.has(z.kind) ? z.kind : "ga";
+    const x = clamp(Number(z.x) || 0, 0, W - 0.5), y = clamp(Number(z.y) || 0, 0, L - 0.5);
+    const w = clamp(Number(z.w) || 2, 0.5, W - x), h = clamp(Number(z.h) || 2, 0.5, L - y);
+    const points: [number, number][] = [[x, y], [x + w, y], [x + w, y + h], [x, y + h]];
+    const { data: zoneId, error } = await db.rpc("save_zone", { p_map: form.mapId, p_name: z.name?.slice(0, 60) || "Zona", p_kind: kind, p_color: z.color || "#7c3aed", p_points: points, p_ga_capacity: null });
+    if (error) return { error: error.message };
+    if (kind === "seated" && zoneId) {
+      const rows = Math.max(1, Math.floor(h / 0.9) + 1), cols = Math.max(1, Math.floor(w / 0.55) + 1);
+      await db.rpc("generate_zone_seats", { p_zone: zoneId, p_rows: rows, p_cols: cols, p_row_start: "A", p_seat_start: 1, p_origin_x: x + 0.275, p_origin_y: y + 0.45, p_dx: 0.55, p_dy: 0.9 });
+    }
+  }
+  revalidatePath(`/dashboard/recintos/${form.mapId}`);
+  return { ok: true };
+}
+
 export async function publishMap(mapId: string) {
   const db = await createClient();
   const { error } = await db.rpc("publish_map", { p_map: mapId });

@@ -7,7 +7,7 @@ import {
   Rocket, Plus, Gauge, Eye, Users, DoorOpen, ShieldAlert,
 } from "lucide-react";
 import { createClient } from "@/lib/supabase/browser";
-import { setMapBackground, autoGenerateLayout, saveZone, publishMap } from "@/app/dashboard/recintos/actions";
+import { setMapBackground, autoGenerateLayout, saveZone, publishMap, materializeAILayout } from "@/app/dashboard/recintos/actions";
 import { MapEditor, type EditorZone, type EditorSeat } from "@/components/dashboard/MapEditor";
 import { VenueViewer } from "@/components/dashboard/VenueViewer";
 import { VenueModel3D } from "@/components/dashboard/VenueModel3D";
@@ -23,6 +23,16 @@ const QUICK = [
   { name: "Área VIP", kind: "ga", color: "#eab308" }, { name: "Mesas", kind: "table", color: "#f59e0b" },
   { name: "Camerinos", kind: "ga", color: "#64748b" }, { name: "Pantalla LED", kind: "ga", color: "#a855f7" },
   { name: "Cabina técnica", kind: "ga", color: "#22d3ee" }, { name: "Zona de prensa", kind: "ga", color: "#fb7185" },
+];
+const OBJECTS: { name: string; kind: string; color: string; w: number; h: number }[] = [
+  { name: "Escenario", kind: "ga", color: "#d6219b", w: 8, h: 3 }, { name: "Tarima", kind: "ga", color: "#d6219b", w: 4, h: 2 },
+  { name: "Pantalla LED", kind: "ga", color: "#a855f7", w: 3, h: 0.6 }, { name: "Cabina de sonido", kind: "ga", color: "#22d3ee", w: 2, h: 2 },
+  { name: "Mesa redonda", kind: "table", color: "#f59e0b", w: 1.8, h: 1.8 }, { name: "Mesa rectangular", kind: "table", color: "#f59e0b", w: 2.4, h: 0.9 },
+  { name: "Recepción", kind: "ga", color: "#10b981", w: 3, h: 1 }, { name: "Mesa de registro", kind: "ga", color: "#10b981", w: 2, h: 0.8 },
+  { name: "Librería", kind: "ga", color: "#84cc16", w: 3, h: 2 }, { name: "Tienda / Merch", kind: "ga", color: "#84cc16", w: 3, h: 2 },
+  { name: "Cafetería", kind: "ga", color: "#f97316", w: 3, h: 3 }, { name: "Área VIP", kind: "ga", color: "#eab308", w: 4, h: 4 },
+  { name: "Backstage", kind: "ga", color: "#64748b", w: 4, h: 3 }, { name: "Baños", kind: "ga", color: "#38bdf8", w: 2.5, h: 2.5 },
+  { name: "Primeros auxilios", kind: "ga", color: "#ef4444", w: 2, h: 2 }, { name: "Bloque de sillas", kind: "seated", color: "#7c3aed", w: 6, h: 4 },
 ];
 const fld = "w-full rounded-lg border border-line bg-surface/60 px-2.5 py-2 text-sm outline-none focus:border-fuchsia/60";
 
@@ -53,11 +63,14 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
   const [rowGap, setRowGap] = useState("0.9");
   const [centralAisle, setCentralAisle] = useState(true);
   const [lateralAisles, setLateralAisles] = useState(true);
-  // Opción 2: crear por datos (sin foto)
-  const [mode, setMode] = useState<"foto" | "datos">("foto");
+  // Crear por datos / por prompt
+  const [mode, setMode] = useState<"foto" | "datos" | "prompt">("prompt");
   const [shape, setShape] = useState("Rectangular");
   const [columns, setColumns] = useState("0");
   const [stageSide, setStageSide] = useState("Frente");
+  const [prompt, setPrompt] = useState("");
+  const [chat, setChat] = useState("");
+  const [chatLog, setChatLog] = useState<{ role: "user" | "ai"; text: string }[]>([]);
 
   const area = (Number(width) || 0) * (Number(length) || 0);
   const capacity = seats.length;
@@ -124,6 +137,48 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
 
   function doPublish() { setPublishing(true); start(async () => { await publishMap(mapId); router.refresh(); setPublishing(false); }); }
 
+  function generateFromPrompt() {
+    if (!prompt.trim()) { setErr("Describe el espacio que necesitas"); return; }
+    setErr(null); setStep("analyzing"); setStepIdx(0);
+    timer.current = setInterval(() => setStepIdx((s) => Math.min(s + 1, ANALYZE_STEPS.length - 1)), 500);
+    start(async () => {
+      try {
+        const r = await fetch("/api/venue/generate-from-prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "generate", prompt, widthM: Number(width), lengthM: Number(length) }) });
+        const d = await r.json();
+        if (timer.current) clearInterval(timer.current);
+        if (d.reason === "no_key") { setErr("Configura ANTHROPIC_API_KEY para el generador por IA."); setStep("upload"); return; }
+        if (!d.ok || !d.zones) { setErr(d.error || "No se pudo generar el espacio"); setStep("upload"); return; }
+        await materializeAILayout({ mapId, widthM: d.widthM, lengthM: d.lengthM, zones: d.zones, replace: true });
+        setStep("studio"); router.refresh();
+      } catch (e) { if (timer.current) clearInterval(timer.current); setErr((e as Error).message); setStep("upload"); }
+    });
+  }
+
+  function sendChat() {
+    const msg = chat.trim(); if (!msg) return;
+    setChat(""); setChatLog((l) => [...l, { role: "user", text: msg }]);
+    start(async () => {
+      try {
+        const r = await fetch("/api/venue/generate-from-prompt", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ mode: "edit", prompt: msg, widthM: Number(width) || widthM, lengthM: Number(length) || heightM, currentZones: zones.map((z) => ({ name: z.name })) }) });
+        const d = await r.json();
+        if (d.reason === "no_key") { setChatLog((l) => [...l, { role: "ai", text: "Configura ANTHROPIC_API_KEY para el asistente." }]); return; }
+        if (d.ok && d.zonesToAdd?.length) { await materializeAILayout({ mapId, widthM: Number(width) || widthM, lengthM: Number(length) || heightM, zones: d.zonesToAdd, replace: false }); setChatLog((l) => [...l, { role: "ai", text: d.summary || "Listo, lo agregué al plano." }]); router.refresh(); }
+        else setChatLog((l) => [...l, { role: "ai", text: d.error || "No pude aplicar ese cambio." }]);
+      } catch (e) { setChatLog((l) => [...l, { role: "ai", text: (e as Error).message }]); }
+    });
+  }
+
+  function addObject(o: { name: string; kind: string; color: string; w: number; h: number }) {
+    const W = Number(width) || widthM; const x = 1 + (zones.length % 5) * 1.5, y = 1;
+    const pts: [number, number][] = [[x, y], [Math.min(W - 0.5, x + o.w), y], [Math.min(W - 0.5, x + o.w), y + o.h], [x, y + o.h]];
+    start(async () => { await saveZone({ mapId, name: o.name, kind: o.kind, color: o.color, points: pts, gaCapacity: null }); router.refresh(); });
+  }
+
+  const bboxArea = (pts: [number, number][]) => { if (!pts.length) return 0; const xs = pts.map((p) => p[0]), ys = pts.map((p) => p[1]); return (Math.max(...xs) - Math.min(...xs)) * (Math.max(...ys) - Math.min(...ys)); };
+  const usedM2 = Math.round(zones.reduce((s, z) => s + bboxArea(z.points), 0));
+  const freeM2 = Math.max(0, Math.round(area - usedM2));
+  const accesses = zones.filter((z) => /entrada|acceso/i.test(z.name)).length;
+
   // Recomendaciones con indicadores (computadas + IA)
   const recs = useMemo(() => {
     const density = area > 0 ? capacity / area : 0;
@@ -146,15 +201,29 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
       <div className="glass ring-grad rounded-3xl p-8">
         <Stepper active={0} />
         <div className="mx-auto mt-6 max-w-2xl text-center">
-          <h2 className="font-display text-2xl font-bold">Crea tu recinto con IA</h2>
-          <p className="mt-2 text-sm text-muted">Sube una foto del recinto, o créalo solo con sus datos: la IA genera el mapa y un modelo 3D profesional.</p>
+          <h2 className="font-display text-2xl font-bold">Generador Inteligente de Espacios IA</h2>
+          <p className="mt-2 text-sm text-muted">Descríbelo en palabras, créalo por datos o sube una foto: la IA construye el espacio completo (zonas, sillas, escenario, accesos…) y un modelo 3D.</p>
 
           <div className="mx-auto mt-5 flex w-fit rounded-full border border-line p-0.5 text-sm">
+            <button onClick={() => setMode("prompt")} className={`rounded-full px-4 py-1.5 transition ${mode === "prompt" ? "brand-gradient text-ink" : "text-muted"}`}>Describir</button>
+            <button onClick={() => setMode("datos")} className={`rounded-full px-4 py-1.5 transition ${mode === "datos" ? "brand-gradient text-ink" : "text-muted"}`}>Por datos</button>
             <button onClick={() => setMode("foto")} className={`rounded-full px-4 py-1.5 transition ${mode === "foto" ? "brand-gradient text-ink" : "text-muted"}`}>Subir foto</button>
-            <button onClick={() => setMode("datos")} className={`rounded-full px-4 py-1.5 transition ${mode === "datos" ? "brand-gradient text-ink" : "text-muted"}`}>Crear sin foto</button>
           </div>
 
-          {mode === "foto" ? (
+          {mode === "prompt" ? (
+            <div className="mt-5 text-left">
+              <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">
+                <L label={`Ancho (${unit})`}><input value={width} onChange={(e) => setWidth(e.target.value)} type="number" className={fld} /></L>
+                <L label={`Largo (${unit})`}><input value={length} onChange={(e) => setLength(e.target.value)} type="number" className={fld} /></L>
+                <L label={`Altura (${unit})`}><input value={height} onChange={(e) => setHeight(e.target.value)} type="number" className={fld} /></L>
+              </div>
+              <textarea value={prompt} onChange={(e) => setPrompt(e.target.value)} rows={4} className={`${fld} mt-3`}
+                placeholder="Ej: Auditorio para 850 personas con escenario de 14 m, dos pantallas LED laterales, una librería, una cafetería pequeña, cuatro mesas de registro, área VIP, dos accesos principales y cuatro salidas de emergencia." />
+              {err && <p className="mt-2 text-sm text-fuchsia">{err}</p>}
+              <button onClick={generateFromPrompt} disabled={pending} className="brand-gradient mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold text-ink disabled:opacity-50"><Sparkles className="h-4 w-4" /> Generar espacio con IA</button>
+              <p className="mt-2 text-center text-[11px] text-muted">La IA interpreta tu descripción y construye el espacio completo respetando las medidas.</p>
+            </div>
+          ) : mode === "foto" ? (
             <>
               <label onDragOver={(e) => { e.preventDefault(); setDrag(true); }} onDragLeave={() => setDrag(false)} onDrop={(e) => { e.preventDefault(); setDrag(false); const f = e.dataTransfer.files?.[0]; if (f) uploadPhoto(f); }}
                 className={`mt-5 flex cursor-pointer flex-col items-center justify-center gap-3 rounded-3xl border-2 border-dashed px-6 py-12 transition ${drag ? "border-fuchsia bg-fuchsia/5" : "border-line hover:border-fuchsia/50"}`}>
@@ -299,6 +368,38 @@ export function RecintoStudio({ mapId, name, widthM, heightM, status, background
             </div>
           </Panel>
 
+          <Panel title="Cálculos en vivo">
+            <div className="grid grid-cols-2 gap-x-3 gap-y-1 text-xs">
+              <Calc label="Sillas" value={capacity.toLocaleString("es-MX")} />
+              <Calc label="Área total" value={`${Math.round(area)} ${unit}²`} />
+              <Calc label="m² usados" value={`${usedM2}`} />
+              <Calc label="m² libres" value={`${freeM2}`} />
+              <Calc label="% ocupado" value={`${area > 0 ? Math.round((usedM2 / area) * 100) : 0}%`} />
+              <Calc label="Accesos" value={`${accesses}`} />
+              <Calc label="Salidas" value={`${exits}`} />
+              <Calc label="Baños" value={`${baths}`} />
+            </div>
+          </Panel>
+
+          <Panel title="Asistente IA">
+            <div className="max-h-40 space-y-1.5 overflow-y-auto">
+              {chatLog.length === 0 && <p className="text-[11px] text-muted">Pídele cambios: “agrega una cafetería cerca de la entrada”, “zona VIP para 100”, “haz más ancho el pasillo central”.</p>}
+              {chatLog.map((m, i) => <div key={i} className={`rounded-lg px-2.5 py-1.5 text-xs ${m.role === "user" ? "bg-fuchsia/10 text-fg" : "bg-surface/60 text-muted"}`}>{m.text}</div>)}
+              {pending && <div className="flex items-center gap-1.5 text-[11px] text-muted"><Loader2 className="h-3 w-3 animate-spin" /> pensando…</div>}
+            </div>
+            <div className="mt-2 flex gap-1.5">
+              <input value={chat} onChange={(e) => setChat(e.target.value)} onKeyDown={(e) => { if (e.key === "Enter") sendChat(); }} placeholder="Escribe un cambio…" className={fld} />
+              <button onClick={sendChat} disabled={pending || !chat.trim()} className="brand-gradient shrink-0 rounded-lg px-3 text-sm font-semibold text-ink disabled:opacity-50">Enviar</button>
+            </div>
+          </Panel>
+
+          <Panel title="Objetos">
+            <div className="flex flex-wrap gap-1.5">
+              {OBJECTS.map((o) => <button key={o.name} onClick={() => addObject(o)} disabled={pending} className="rounded-lg border border-line px-2 py-1 text-[11px] transition hover:border-fuchsia/50 disabled:opacity-50">+ {o.name}</button>)}
+            </div>
+            <p className="mt-1.5 text-[10px] text-muted/70">Se agregan al plano; muévelos en el editor.</p>
+          </Panel>
+
           {bgUrl && (
             <Panel title="Foto original → Mapa IA">
               <img src={bgUrl} alt="Recinto" className="w-full rounded-lg object-contain" />
@@ -338,6 +439,9 @@ function L({ label, children }: { label: string; children: React.ReactNode }) {
 }
 function Toggle({ on, onClick, children }: { on: boolean; onClick: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} className={`flex items-center gap-1 rounded-full px-2.5 py-1 transition ${on ? "bg-fuchsia/15 text-fuchsia" : "border border-line text-muted"}`}>{on && <Check className="h-3 w-3" />}{children}</button>;
+}
+function Calc({ label, value }: { label: string; value: string }) {
+  return <div className="flex items-center justify-between"><span className="text-muted">{label}</span><span className="font-display font-bold tabular-nums text-fg">{value}</span></div>;
 }
 function Quick({ onClick, children }: { onClick: () => void; children: React.ReactNode }) {
   return <button onClick={onClick} className="rounded-lg border border-line px-2 py-1.5 text-[11px] transition hover:border-fuchsia/50">{children}</button>;
