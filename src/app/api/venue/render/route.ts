@@ -4,45 +4,44 @@ import { createClient } from "@/lib/supabase/server";
 export const runtime = "nodejs";
 export const maxDuration = 60;
 
-// Gemini "nano-banana" (image generation). Modelo configurable.
-const MODEL = process.env.GEMINI_IMAGE_MODEL ?? "gemini-2.5-flash-image";
+// Replicate. Modelo configurable (default flux-schnell: rápido y económico).
+const MODEL = process.env.REPLICATE_MODEL ?? "black-forest-labs/flux-schnell";
 
-/** Genera un render fotorrealista (decorativo) del espacio con Gemini. Degrada sin key. */
+/** Genera un render fotorrealista (decorativo) del espacio con Replicate. Degrada sin token. */
 export async function POST(req: Request) {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return NextResponse.json({ error: "no autenticado" }, { status: 401 });
 
-  const key = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-  if (!key) return NextResponse.json({ ok: false, reason: "no_key", message: "Configura GEMINI_API_KEY para generar renders fotorrealistas." });
+  const token = process.env.REPLICATE_API_TOKEN;
+  if (!token) return NextResponse.json({ ok: false, reason: "no_key", message: "Configura REPLICATE_API_TOKEN para generar renders fotorrealistas." });
 
   const b = await req.json().catch(() => ({}));
-  const { eventType, widthM, lengthM, zones, planImage } = b as { eventType?: string; widthM?: number; lengthM?: number; zones?: string[]; planImage?: string };
-
+  const { eventType, widthM, lengthM, zones } = b as { eventType?: string; widthM?: number; lengthM?: number; zones?: string[] };
   const zonesTxt = (zones || []).slice(0, 12).join(", ");
-  const prompt = `Render arquitectónico FOTORREALISTA, calidad Unreal Engine 5 / Enscape, de un espacio de evento tipo "${eventType || "auditorio"}" de aproximadamente ${widthM ?? 20}m x ${lengthM ?? 30}m. Vista cenital (planta, cámara 90° desde arriba). Incluye: ${zonesTxt || "escenario al frente, filas de sillas, pasillos, accesos y salidas"}. Iluminación realista, materiales PBR, sombras suaves, proporciones arquitectónicas correctas, piso y muros realistas. Sin texto ni marcas de agua. Estilo plano de evento profesional.`;
+  const prompt = `Photorealistic architectural render, top-down aerial floor plan view (camera straight above, 90 degrees), of an event space type "${eventType || "auditorium"}" approximately ${widthM ?? 20}m by ${lengthM ?? 30}m. Includes: ${zonesTxt || "stage at front, rows of chairs, aisles, entrances and exits"}. Realistic lighting, PBR materials, soft shadows, correct architectural proportions, realistic floor and walls. Unreal Engine 5 / Enscape quality. No text, no watermark.`;
 
-  // Si llega el plano 2D, se usa como guía de composición (image-to-image).
-  const parts: unknown[] = [{ text: prompt }];
-  if (planImage && planImage.startsWith("data:image")) {
-    const [meta, data] = planImage.split(",");
-    const mime = meta.match(/data:(.*?);/)?.[1] || "image/png";
-    parts.push({ inline_data: { mime_type: mime, data } });
-  }
-
+  const headers = { Authorization: `Bearer ${token}`, "content-type": "application/json", Prefer: "wait" };
   try {
-    const resp = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent?key=${key}`, {
-      method: "POST", headers: { "content-type": "application/json" },
-      body: JSON.stringify({ contents: [{ parts }] }),
+    const start = await fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
+      method: "POST", headers,
+      body: JSON.stringify({ input: { prompt, aspect_ratio: "4:3", num_outputs: 1, output_format: "webp", output_quality: 90 } }),
     });
-    if (!resp.ok) return NextResponse.json({ error: `Render IA: ${resp.status}`, detail: (await resp.text()).slice(0, 300) }, { status: 502 });
-    const data = await resp.json();
-    const out = data?.candidates?.[0]?.content?.parts ?? [];
-    const img = out.find((p: { inline_data?: { data: string; mime_type: string }; inlineData?: { data: string; mimeType: string } }) => p.inline_data || p.inlineData);
-    const inline = img?.inline_data || img?.inlineData;
-    if (!inline?.data) return NextResponse.json({ error: "La IA no devolvió imagen" }, { status: 502 });
-    const mime = inline.mime_type || inline.mimeType || "image/png";
-    return NextResponse.json({ ok: true, image: `data:${mime};base64,${inline.data}` });
+    if (!start.ok) return NextResponse.json({ error: `Render IA: ${start.status}`, detail: (await start.text()).slice(0, 300) }, { status: 502 });
+    let pred = await start.json();
+
+    // Si aún no terminó (Prefer: wait expiró), sondea el resultado.
+    for (let i = 0; i < 10 && (pred.status === "starting" || pred.status === "processing"); i++) {
+      await new Promise((r) => setTimeout(r, 1500));
+      const poll = await fetch(pred.urls?.get, { headers: { Authorization: `Bearer ${token}` } });
+      pred = await poll.json();
+    }
+    if (pred.status === "failed" || pred.status === "canceled") return NextResponse.json({ error: pred.error || "La IA falló al generar" }, { status: 502 });
+
+    const out = pred.output;
+    const url = Array.isArray(out) ? out[0] : typeof out === "string" ? out : null;
+    if (!url) return NextResponse.json({ error: "La IA no devolvió imagen" }, { status: 502 });
+    return NextResponse.json({ ok: true, image: url });
   } catch (e) {
     return NextResponse.json({ error: (e as Error).message }, { status: 502 });
   }

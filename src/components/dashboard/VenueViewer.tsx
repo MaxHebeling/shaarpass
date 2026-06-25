@@ -23,7 +23,7 @@ export function VenueViewer({ name, widthM, heightM, zones, seats }: {
     try {
       const r = await fetch("/api/venue/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventName: name, widthM, lengthM: heightM, zones: zones.map((z) => z.name) }) });
       const d = await r.json();
-      if (d.reason === "no_key") setRenderErr("Configura GEMINI_API_KEY para generar renders fotorrealistas.");
+      if (d.reason === "no_key") setRenderErr(d.message || "Configura el proveedor de imágenes para generar renders.");
       else if (!d.ok || !d.image) setRenderErr(d.error || "No se pudo generar el render");
       else setRenderImg(d.image);
     } catch (e) { setRenderErr((e as Error).message); }
