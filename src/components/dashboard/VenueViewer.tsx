@@ -1,7 +1,7 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { Box, Square, Download, Printer } from "lucide-react";
+import { Box, Square, Download, Printer, Sparkles, Loader2 } from "lucide-react";
 import type { EditorZone, EditorSeat } from "@/components/dashboard/MapEditor";
 
 const ISO = Math.PI / 6; // 30°
@@ -14,6 +14,21 @@ export function VenueViewer({ name, widthM, heightM, zones, seats }: {
 }) {
   const [view, setView] = useState<"2d" | "3d">("2d");
   const svgRef = useRef<SVGSVGElement>(null);
+  const [renderImg, setRenderImg] = useState<string | null>(null);
+  const [rendering, setRendering] = useState(false);
+  const [renderErr, setRenderErr] = useState<string | null>(null);
+
+  async function generateRender() {
+    setRendering(true); setRenderErr(null); setRenderImg(null);
+    try {
+      const r = await fetch("/api/venue/render", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ eventName: name, widthM, lengthM: heightM, zones: zones.map((z) => z.name) }) });
+      const d = await r.json();
+      if (d.reason === "no_key") setRenderErr("Configura GEMINI_API_KEY para generar renders fotorrealistas.");
+      else if (!d.ok || !d.image) setRenderErr(d.error || "No se pudo generar el render");
+      else setRenderImg(d.image);
+    } catch (e) { setRenderErr((e as Error).message); }
+    finally { setRendering(false); }
+  }
 
   const seatColor = (zoneId: string) => zones.find((z) => z.id === zoneId)?.color ?? "#7c3aed";
 
@@ -72,8 +87,26 @@ export function VenueViewer({ name, widthM, heightM, zones, seats }: {
           </div>
           <button onClick={exportPNG} className="flex items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-sm transition hover:border-white/20"><Download className="h-4 w-4" /> PNG</button>
           <button onClick={printMap} className="flex items-center gap-1.5 rounded-full border border-line px-3.5 py-2 text-sm transition hover:border-white/20"><Printer className="h-4 w-4" /> PDF</button>
+          <button onClick={generateRender} disabled={rendering} className="brand-gradient flex items-center gap-1.5 rounded-full px-3.5 py-2 text-sm font-semibold text-ink disabled:opacity-50">{rendering ? <Loader2 className="h-4 w-4 animate-spin" /> : <Sparkles className="h-4 w-4" />} Render IA</button>
         </div>
       </div>
+
+      {(renderImg || renderErr || rendering) && (
+        <div className="mb-3 rounded-2xl border border-line bg-surface/40 p-3">
+          {rendering && <div className="flex items-center gap-2 text-sm text-muted"><Loader2 className="h-4 w-4 animate-spin" /> Generando render fotorrealista…</div>}
+          {renderErr && <p className="text-sm text-amber-400">{renderErr}</p>}
+          {renderImg && (
+            <div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={renderImg} alt="Render del recinto" className="w-full rounded-xl" />
+              <div className="mt-2 flex items-center justify-between text-xs text-muted">
+                <span>Render generado por IA · decorativo (no exacto al layout)</span>
+                <a href={renderImg} download={`${name.replace(/\s+/g, "-")}-render.png`} className="flex items-center gap-1.5 rounded-lg border border-line px-3 py-1.5 transition hover:border-white/20"><Download className="h-3.5 w-3.5" /> Descargar</a>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       <div className="overflow-hidden rounded-2xl border border-line bg-[#0b0b12]">
         {view === "2d" ? (
