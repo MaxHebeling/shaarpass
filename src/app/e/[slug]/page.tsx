@@ -222,11 +222,25 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
         {soldOut && (
-          <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
-            <div className="w-[160%] -rotate-[14deg] border-y-2 border-white/30 bg-red-600/95 py-3 text-center shadow-2xl">
-              <span className="font-display text-3xl font-black uppercase tracking-[0.3em] text-white drop-shadow-md sm:text-5xl">Sold Out</span>
+          <>
+            <div className="absolute inset-0 z-10 bg-black/45 backdrop-blur-[1px]" />
+            <div className="pointer-events-none absolute inset-0 z-20 flex items-center justify-center overflow-hidden">
+              <div className="relative w-[175%] -rotate-[14deg] shadow-[0_25px_70px_-10px_rgba(0,0,0,0.75)]">
+                <div className="border-y-2 border-amber-300/70 bg-gradient-to-r from-[#5b0e0e] via-[#dc2626] to-[#5b0e0e]">
+                  <div className="border-y border-amber-200/30 px-6 py-4">
+                    <div className="flex items-center justify-center gap-4">
+                      <span className="text-base text-amber-300/90 sm:text-xl">✦</span>
+                      <span className="font-display text-3xl font-black uppercase tracking-[0.32em] text-white drop-shadow-[0_2px_4px_rgba(0,0,0,0.5)] sm:text-5xl">Sold&nbsp;Out</span>
+                      <span className="text-base text-amber-300/90 sm:text-xl">✦</span>
+                    </div>
+                    <div className="mt-1 text-center text-[10px] uppercase tracking-[0.55em] text-amber-200/85 sm:text-xs">Agotado</div>
+                  </div>
+                </div>
+                {/* Brillo superior */}
+                <div className="absolute inset-x-0 top-0 h-1/2 bg-gradient-to-b from-white/20 to-transparent" />
+              </div>
             </div>
-          </div>
+          </>
         )}
         <div className="absolute inset-x-0 bottom-0 mx-auto max-w-6xl px-6 pb-8">
           {event.organizations?.logo_url && (
