@@ -4,6 +4,7 @@ import { ArrowLeft } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { MapEditor, type EditorZone, type EditorSeat } from "@/components/dashboard/MapEditor";
 import { AutoVenueAI } from "@/components/dashboard/AutoVenueAI";
+import { VenueViewer } from "@/components/dashboard/VenueViewer";
 
 export const dynamic = "force-dynamic";
 
@@ -62,6 +63,8 @@ export default async function MapEditorPage({ params }: { params: Promise<{ mapI
         initialZones={zones}
         initialSeats={seats}
       />
+
+      <VenueViewer name={map.venues_v2?.name ?? "Recinto"} widthM={Number(map.width_m)} heightM={Number(map.height_m)} zones={zones} seats={seats} />
     </div>
   );
 }
