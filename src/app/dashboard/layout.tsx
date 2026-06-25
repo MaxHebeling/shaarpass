@@ -1,6 +1,6 @@
 import type { ReactNode } from "react";
 import Link from "next/link";
-import { LayoutDashboard, Plus, LogOut, Wallet, ScanLine, Map, Layers, Palette, Sparkles } from "lucide-react";
+import { LayoutDashboard, Plus, LogOut, Wallet, ScanLine, Map, Layers, Palette, Sparkles, Image as ImageIcon } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { signOut } from "./actions";
 
@@ -38,6 +38,9 @@ export default async function DashboardLayout({ children }: { children: ReactNod
           </Link>
           <Link href="/dashboard/arquitecto" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-muted transition hover:bg-surface hover:text-fg">
             <Sparkles className="h-4 w-4" /> Arquitecto IA
+          </Link>
+          <Link href="/dashboard/render" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-muted transition hover:bg-surface hover:text-fg">
+            <ImageIcon className="h-4 w-4" /> Render IA
           </Link>
           <Link href="/dashboard/abonos" className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-muted transition hover:bg-surface hover:text-fg">
             <Layers className="h-4 w-4" /> Abonos
