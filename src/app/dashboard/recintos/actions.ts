@@ -150,6 +150,14 @@ export async function materializeAILayout(form: { mapId: string; widthM: number;
   return { ok: true };
 }
 
+export async function deleteVenue(venueId: string) {
+  const db = await createClient();
+  const { error } = await db.rpc("delete_venue", { p_venue: venueId });
+  if (error) return { error: error.message.includes("EN_USO") ? "Este recinto está asignado a un evento. Quítalo del evento antes de eliminarlo." : error.message };
+  revalidatePath("/dashboard/recintos");
+  return { ok: true };
+}
+
 export async function publishMap(mapId: string) {
   const db = await createClient();
   const { error } = await db.rpc("publish_map", { p_map: mapId });

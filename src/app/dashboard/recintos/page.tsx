@@ -2,6 +2,7 @@ import Link from "next/link";
 import { MapPin, ExternalLink } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { CreateVenue } from "@/components/dashboard/CreateVenue";
+import { DeleteVenueButton } from "@/components/dashboard/DeleteVenueButton";
 
 export const dynamic = "force-dynamic";
 
@@ -36,10 +37,13 @@ export default async function RecintosPage() {
         <div className="space-y-3">
           {venues.map((v) => (
             <div key={v.id} className="glass rounded-2xl p-5">
-              <div className="flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-gold" />
-                <h3 className="font-medium">{v.name}</h3>
-                {v.city && <span className="text-sm text-muted">· {v.city}</span>}
+              <div className="flex items-center justify-between gap-2">
+                <div className="flex min-w-0 items-center gap-2">
+                  <MapPin className="h-4 w-4 shrink-0 text-gold" />
+                  <h3 className="truncate font-medium">{v.name}</h3>
+                  {v.city && <span className="truncate text-sm text-muted">· {v.city}</span>}
+                </div>
+                <DeleteVenueButton venueId={v.id} name={v.name} />
               </div>
               <div className="mt-3 flex flex-wrap gap-2">
                 {v.venue_maps.map((m) => (
