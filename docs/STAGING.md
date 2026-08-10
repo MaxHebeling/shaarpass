@@ -4,8 +4,10 @@ Objetivo: validar cambios grandes (migraciones, cambios de checkout, features) *
 producción**. Staging es una copia con su **propia** base de datos y sus **propias** llaves de
 prueba. Nunca comparte credenciales ni datos con prod.
 
-Estado: **plantilla lista; falta que crees el proyecto Supabase y el branch en Vercel** (los 2
-pasos 🔑). El resto (flujo, migraciones, variables) está definido aquí.
+Estado (2026-08-10): **BD de staging YA creada y cargada.** Proyecto Supabase `shaarpass-staging`
+(ref `ijakjbpefnnausjqiimd`, us-east-1) con el baseline aplicado — reproduce prod exacto (42 tablas,
+56 funciones, 50 policies, 11 storage, 3 buckets, 5 cron). **Solo falta el paso 3 (Vercel):** rama
+`staging` + variables de staging (scope Preview). Los pasos 1 y 2 ya están hechos.
 
 ---
 
@@ -24,18 +26,14 @@ Rama git `main`    ──► Vercel (Production)                 ──► Supab
 
 ## Puesta en marcha (una sola vez)
 
-### 1. 🔑 Crear el proyecto Supabase de staging
-- Supabase → New project → nombre `shaarpass-staging`, **misma región** (us-east-1).
-- Anota: URL del proyecto, `anon key`, `service_role key`.
+### 1. ✅ HECHO — Proyecto Supabase de staging
+`shaarpass-staging`, ref `ijakjbpefnnausjqiimd`, us-east-1. Toma su URL / `anon key` / `service_role key`
+de su dashboard (Settings → API) para el paso 3.
 
-### 2. Aplicar el esquema a staging
-El repo tiene las 49 migraciones en `supabase/migrations/`. Para reproducir el esquema en staging:
-```bash
-# con la CLI de Supabase, apuntando al proyecto staging:
-supabase link --project-ref <ref-de-staging>
-supabase db push        # aplica todas las migraciones en orden
-```
-> Alternativa sin CLI: ejecutar los archivos `0001…` en orden en el SQL Editor del proyecto staging.
+### 2. ✅ HECHO — Esquema aplicado
+El baseline (`supabase/migrations/0000_baseline.sql`) ya se cargó y reproduce prod exacto. Para
+**re-crear** staging desde cero en el futuro: `psql '<conn-staging>' -f supabase/migrations/0000_baseline.sql`
+(o `supabase db push` una vez linkeado). Es una sola migración baseline.
 
 ### 3. 🔑 Crear la rama y el entorno en Vercel
 - Crea la rama git: `git checkout -b staging && git push -u origin staging`.
