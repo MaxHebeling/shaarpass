@@ -54,6 +54,20 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 - `GET /api/health` → liveness (la app responde). Para uptime monitors.
 - `GET /api/ready` → readiness (verifica la base de datos). 200 = ok, 503 = degradado.
 - Smoke manual tras deploy: `curl -s $APP/api/health` y `curl -s $APP/api/ready`.
+- `GET /api/debug/error` → **prueba de la cadena de observabilidad**. Protegida con `CRON_SECRET`;
+  sin la cabecera correcta responde 404 (no anuncia que existe). Dos modos:
+  - `?mode=capture` (default): captura un error y **devuelve el `errorId`**. Busca ese id en Sentry
+    y en los logs de Vercel: deben coincidir. Verifica el transporte.
+  - `?mode=throw`: lanza de verdad, para ejercitar `onRequestError` → `captureError` → Sentry.
+    Genera un 500 real; el `errorId` queda solo en los logs y en Sentry.
+
+  ```bash
+  curl -s -H "Authorization: Bearer $CRON_SECRET" $APP/api/debug/error
+  curl -s -H "Authorization: Bearer $CRON_SECRET" "$APP/api/debug/error?mode=throw"
+  ```
+
+  Úsala **cada vez que toques monitoreo, alertas o el DSN**: es la forma de saber que la cadena
+  sigue viva sin esperar a que se rompa algo de verdad.
 
 ## 6. Migraciones de base de datos
 
@@ -79,7 +93,8 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 ## 8. Monitoring, error tracking y alertas (estado)
 
 - **Hoy:** Vercel Analytics + Speed Insights + health checks + smoke workflow (`.github/workflows/smoke.yml`, corre tras cada deploy y cada 30 min) + captura estructurada de errores (`lib/log.ts` + `instrumentation.ts`, con `errorId` correlacionable).
-- **Pendiente (config externa):** Sentry (`SENTRY_DSN` — el código ya tiene el punto de integración en `captureError`) + uptime monitor externo + canal de alerta. Ver `docs/ENVIRONMENT.md`.
+- **Sentry:** SDK integrado en servidor y edge (`sentry.server.config.ts` / `sentry.edge.config.ts`), inerte sin `SENTRY_DSN`. Cada evento lleva el tag `errorId`, el mismo que sale en los logs de Vercel. Comprobar con `/api/debug/error` (§5). No cubre errores de navegador.
+- **Pendiente (config externa):** uptime monitor externo + canal de alerta. Ver `docs/ENVIRONMENT.md`.
 - **Incidentes:** procedimiento paso a paso en `docs/INCIDENT_RESPONSE.md`.
 
 ## 9. Secretos
