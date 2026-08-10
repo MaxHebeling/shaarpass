@@ -16,3 +16,8 @@ favicon-13/
 
 # Backups locales del Storage (no versionar)
 storage-backup/
+
+staging-load.sql
+prod-schema.sql
+
+supabase/.temp/
