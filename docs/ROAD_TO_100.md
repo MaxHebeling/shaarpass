@@ -62,10 +62,12 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
     tu destino de respaldo; ver `RELIABILITY.md §7`. Automatizar el envío a un destino externo queda
     como mejora futura.
 
-- [ ] **5. Entorno de staging** 🔑+🧑‍💻 · *+5*
-  - **Dónde:** Vercel → branch `staging` con su propia Preview + un proyecto Supabase aparte para pruebas.
-  - **Por qué:** validar cambios grandes sin tocar producción.
-  - **Verificar:** un push a `staging` despliega a una URL de preview con su propia BD; yo dejo el flujo y los docs.
+- [~] **5. Entorno de staging** 🔑+🧑‍💻 — **runbook listo** en `docs/STAGING.md` (arquitectura, variables,
+  migraciones, webhook de prueba, flujo feature→staging→main). **Falta tuyo (2 pasos de consola):**
+  (1) crear el proyecto Supabase `shaarpass-staging`; (2) crear la rama `staging` + poner las variables
+  de staging en Vercel (scope Preview). Con eso queda operativo — todo el diseño y los pasos ya están escritos.
+  - **Por qué:** validar cambios grandes (migraciones, checkout) sin tocar producción.
+  - **Verificar:** push a `staging` → preview con su BD; `GET /api/ready` de staging en `database:ok`.
 
 - [ ] **6. Rotar secretos expuestos** 🔑 · *+3*
   - **Dónde:** consola de cada proveedor (Replicate, y cualquier clave pegada en chat) → generar nueva → actualizar en Vercel env → redeploy.
