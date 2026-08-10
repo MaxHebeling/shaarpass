@@ -22,7 +22,7 @@ jobs:
           echo "$body"
           echo "$body" | grep -q '"ok":true' || { echo "::error::health no ok"; exit 1; }
 
-      - name: Ready (readiness: DB + config)
+      - name: "Ready (readiness: DB + config)"
         run: |
           echo "→ /api/ready"
           code=$(curl -s -o /tmp/ready.json -w "%{http_code}" --max-time 20 https://www.shaarpass.io/api/ready)
