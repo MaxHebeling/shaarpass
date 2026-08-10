@@ -28,5 +28,4 @@ export default withSentryConfig(nextConfig, {
   sourcemaps: { disable: !process.env.SENTRY_AUTH_TOKEN },
   // Oculta las rutas locales en los stack traces subidos.
   widenClientFileUpload: false,
-  disableLogger: true,
 });

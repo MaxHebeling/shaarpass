@@ -68,6 +68,10 @@ Marca `[x]` conforme completes. Los 6 del Bloque 1 dan el salto grande (→ ~95)
 
 - [ ] **11. Smoke con auto-rollback** 🔑+🧑‍💻 — requiere un `VERCEL_TOKEN` como secret de GitHub; con él, el smoke revierte prod solo si queda roja.
 - [ ] **12. Dependabot** 🔑 — GitHub → Settings → Code security → Enable Dependabot (1 clic). PRs de seguridad automáticos.
+  **Sube de prioridad:** el 10-ago-2026, un `npm audit` de rutina destapó que Next 16.2.7 arrastraba 9 avisos, uno de
+  ellos un bypass de middleware/proxy en App Router con Turbopack ([GHSA-6gpp-xcg3-4w24](https://github.com/advisories/GHSA-6gpp-xcg3-4w24))
+  — justo el mecanismo que protege `/dashboard`. Llevaba semanas ahí sin que nada avisara. Se resolvió subiendo a
+  Next 16.3.0 + postcss (`npm audit` en 0). Dependabot es lo que hace que la próxima vez el aviso llegue solo.
 - [ ] **13. SLO + presupuesto de errores** 🔑 — definir objetivo (ej. 99.9% en `/api/ready`) una vez haya monitoreo del ítem 3.
 
 ---
