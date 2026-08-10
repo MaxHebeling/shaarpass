@@ -67,9 +67,10 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
 ## 🟠 Bloque 2 — Código que hace Claude (avísame) (~95 → ~99)
 
 - [x] **7. Rate limiting con Upstash** 🧑‍💻 — `src/lib/rateLimit.ts`: Upstash → RPC `hit_rate_limit` → fail-open,
-  con cabecera `Retry-After`. Aplicado en `lead`, `promo/validate` (antes no tenía ninguno), `queue/join` y `checkout`.
-  Se enciende solo al poner `UPSTASH_REDIS_REST_URL`/`_TOKEN`; sin ellas se comporta igual que antes.
-  *Pendiente menor:* faltan por migrar al helper `season-checkout`, `resale/checkout` y las tres de `ticket/*`.
+  con cabecera `Retry-After`. Se enciende solo al poner `UPSTASH_REDIS_REST_URL`/`_TOKEN`; sin ellas usa el respaldo
+  Postgres, igual que antes. **Aplicado en las 10 rutas** de cara al usuario: `lead`, `promo/validate` (antes no
+  tenían ninguno), `queue/join`, `checkout`, `season-checkout`, `resale/checkout` y las tres de `ticket/*`
+  (`transfer`/`code`/`list`). Ya no queda ninguna llamada directa a `hit_rate_limit` fuera del helper.
 - [x] **8. Cobertura E2E del checkout Stripe** 🧑‍💻 — 32 pruebas sobre las rutas HTTP reales con Stripe y Supabase
   mockeados (`src/test/fakeSupabase.ts`): validación, rate limit, idempotencia, precios autoritativos desde la BD,
   límite por comprador, cola y presale, evento gratis; y en el webhook: firma, idempotencia, 500 para que Stripe

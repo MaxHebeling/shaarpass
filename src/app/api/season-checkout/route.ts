@@ -3,6 +3,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
+import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -18,9 +19,8 @@ export async function POST(req: Request) {
   const { seasonId, buyerEmail, idempotencyKey } = parsed.data;
 
   const db = createAdminClient();
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
-  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `season-checkout:${ip}`, p_max: 20, p_window_seconds: 60 });
-  if (rlOk === false) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429 });
+  const rl = await rateLimit({ key: `season-checkout:${clientIp(req)}`, max: 20, windowSeconds: 60, db });
+  if (!rl.ok) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429, headers: retryAfterHeaders(rl) });
 
   // Reusa una orden previa con la misma idempotency (reintentos del cliente).
   const { data: prior } = await db

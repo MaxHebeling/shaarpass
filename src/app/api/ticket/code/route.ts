@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createPublicClient } from "@/lib/supabase/public";
+import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -10,9 +11,8 @@ export async function GET(req: Request) {
 
   const db = createPublicClient();
   // Límite generoso: la página /t hace polling cada 15s (~4/min/pestaña); esto frena fuerza bruta sin romper el uso legítimo.
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
-  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `tkt:code:${ip}`, p_max: 120, p_window_seconds: 60 });
-  if (rlOk === false) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429 });
+  const rl = await rateLimit({ key: `tkt:code:${clientIp(req)}`, max: 120, windowSeconds: 60, db });
+  if (!rl.ok) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429, headers: retryAfterHeaders(rl) });
 
   const { data } = await db.rpc("ticket_rotating_code", { p_token: token });
   const row = Array.isArray(data) ? data[0] : data;
