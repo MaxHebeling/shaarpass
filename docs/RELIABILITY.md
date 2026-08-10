@@ -51,7 +51,14 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 
 ## 5. Health checks / smoke tests
 
-- `GET /api/health` → liveness (la app responde). Para uptime monitors.
+- `GET /api/health` → liveness (la app responde). Para uptime monitors. Devuelve `version` (commit),
+  **`deployment`** (único por deployment) y `env`.
+  **Para saber si un redeploy entró, mira `deployment`, no `version`:** al redesplegar el mismo
+  commit —lo normal tras cambiar una variable de entorno— `version` no cambia y `deployment` sí.
+
+  ```bash
+  curl -s $APP/api/health | jq '{version, deployment}'
+  ```
 - `GET /api/ready` → readiness (verifica la base de datos). 200 = ok, 503 = degradado.
 - Smoke manual tras deploy: `curl -s $APP/api/health` y `curl -s $APP/api/ready`.
 - `GET /api/debug/error` → **prueba de la cadena de observabilidad**. Protegida con `CRON_SECRET`;
