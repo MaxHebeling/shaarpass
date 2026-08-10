@@ -1,7 +1,17 @@
+/**
+ * Proxy (antes `middleware`, renombrado en Next 16).
+ *
+ * Es el boundary de autenticación de `/dashboard`: corre delante de la app y
+ * redirige a /login a quien no tenga sesión. Por eso está cubierto por pruebas
+ * — un fallo aquí es acceso no autorizado, no un bug cosmético.
+ *
+ * Nota: NO es la única defensa. Las tablas tienen RLS en Supabase, así que un
+ * bypass del proxy no basta para leer datos ajenos. Defensa en profundidad.
+ */
 import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
