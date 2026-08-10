@@ -1,8 +1,8 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-**10 de 13 ítems cerrados** (última actualización: 10-ago-2026).
-Cerrados: 1, 2, 3, 4, 5, 7, 8, 9, 10, 12. Quedan: **6** (rotar secretos, ahora incluye las 2 DB
-passwords), **11** (auto-rollback: código en `main`, falta solo poner `VERCEL_TOKEN`), **13** (SLO).
+**11 de 13 ítems cerrados** (última actualización: 10-ago-2026).
+Cerrados: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12. Quedan: **11** (auto-rollback: código en `main`, falta solo
+poner `VERCEL_TOKEN`) y **13** (SLO en UptimeRobot). Ambos son acciones de consola tuyas.
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -74,9 +74,12 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
   - **Verificar tú mismo:** abre `https://shaarpass-git-staging-max-ab784c70.vercel.app/api/ready` en el
     navegador (logueado en Vercel el SSO pasa solo) → `database:ok`, `config:ok`.
 
-- [ ] **6. Rotar secretos expuestos** 🔑 · *+3*
-  - **Dónde:** consola de cada proveedor (Replicate, y cualquier clave pegada en chat) → generar nueva → actualizar en Vercel env → redeploy.
-  - **Por qué:** toda clave que pasó por un chat se considera comprometida.
+- [x] **6. Rotar secretos expuestos** 🔑 · *hecho 10-ago-2026 (DB passwords)*
+  - **Hecho:** rotadas las **DB passwords** de prod (`abkzfztzavrsglowwkkw`) y staging (`ijakjbpefnnausjqiimd`)
+    que pasaron por la terminal durante el `pg_dump`/carga. Verificado tras rotar: prod `/api/ready`
+    en `database:ok` + `config:ok`, staging alcanzable — nada se rompió (la app usa API keys, no la DB password).
+  - **Opcional pendiente:** si el `REPLICATE_API_TOKEN` u otra clave se pegó en chat en el pasado, rótala
+    igual por higiene (Replicate → regenerar → Vercel env → redeploy). No urgente.
   - **Verificar:** la clave vieja da 401; la app sigue sana en `/api/ready`.
   - **Nota:** el `SENTRY_DSN` **no** entra aquí. Un DSN es público por diseño (solo permite enviar
     eventos, no leer), va embebido en el JS del cliente de cualquier app. No hay que rotarlo.
