@@ -1,8 +1,7 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-**11 de 13 ítems cerrados** (última actualización: 10-ago-2026).
-Cerrados: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 12. Quedan: **11** (auto-rollback: código en `main`, falta solo
-poner `VERCEL_TOKEN`) y **13** (SLO en UptimeRobot). Ambos son acciones de consola tuyas.
+**12 de 13 ítems cerrados** (última actualización: 10-ago-2026).
+Cerrados: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12. Queda solo **13** (definir SLO en UptimeRobot).
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -111,11 +110,10 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
 
 ## 🟡 Bloque 3 — Robustez fina (~99 → 100)
 
-- [~] **11. Smoke con auto-rollback** 🔑+🧑‍💻 — **código listo e inerte** (job `rollback` en `smoke.yml`).
-  Solo se dispara cuando el smoke falla **tras un deploy** (no en los chequeos programados), **reconfirma 3 veces**
-  antes de actuar (no revierte por un blip) y **no hace nada sin `VERCEL_TOKEN`**. **Falta tuyo:** crear el token
-  en Vercel (Account → Settings → Tokens, scope `max-ab784c70`) y ponerlo como secret `VERCEL_TOKEN` en GitHub
-  (repo → Settings → Secrets and variables → Actions). Al ponerlo, el auto-rollback se activa solo.
+- [x] **11. Smoke con auto-rollback** 🔑+🧑‍💻 · *armado 10-ago-2026* — job `rollback` en `smoke.yml` +
+  secret `VERCEL_TOKEN` puesto en GitHub (token dedicado de Vercel). **Activo:** si el smoke falla **tras
+  un deploy** (no en los chequeos programados), reconfirma 3 veces y revierte prod con `vercel rollback`.
+  Se ejercita de verdad en el próximo deploy que dejara `/api/ready` en rojo (o pausando un deploy de prueba).
 - [x] **12. Dependabot** 🔑 · *hecho 10-ago-2026* — activados: dependency graph, alerts, malware alerts,
   security updates y grouped updates (agrupa los PRs para que no te inunden). Dejamos fuera *version updates*,
   que exige un `dependabot.yml` y genera mucho más ruido.
