@@ -1,6 +1,6 @@
 import { CheckCircle2, XCircle } from "lucide-react";
 import { createPublicClient } from "@/lib/supabase/public";
-import { unsubSig } from "@/lib/email/campaigns";
+import { verifyUnsubSig } from "@/lib/email/unsubscribe";
 
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Darte de baja — ShaarPass", robots: { index: false } };
@@ -8,7 +8,7 @@ export const metadata = { title: "Darte de baja — ShaarPass", robots: { index:
 export default async function UnsubscribePage({ searchParams }: { searchParams: Promise<{ e?: string; s?: string }> }) {
   const { e, s } = await searchParams;
   let ok = false;
-  if (e && s && s === unsubSig(e)) {
+  if (verifyUnsubSig(e ?? "", s)) {
     try {
       await createPublicClient().rpc("email_optout", { p_email: e });
       ok = true;

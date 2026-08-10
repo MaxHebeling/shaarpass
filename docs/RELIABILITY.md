@@ -94,7 +94,7 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 
 - **Hoy:** Vercel Analytics + Speed Insights + health checks + smoke workflow (`.github/workflows/smoke.yml`, corre tras cada deploy y cada 30 min) + captura estructurada de errores (`lib/log.ts` + `instrumentation.ts`, con `errorId` correlacionable).
 - **Sentry:** SDK integrado en servidor y edge (`sentry.server.config.ts` / `sentry.edge.config.ts`), inerte sin `SENTRY_DSN`. Cada evento lleva el tag `errorId`, el mismo que sale en los logs de Vercel. Comprobar con `/api/debug/error` (§5). No cubre errores de navegador.
-- **Pendiente (config externa):** uptime monitor externo + canal de alerta. Ver `docs/ENVIRONMENT.md`.
+- **Uptime:** UptimeRobot, 2 monitores cada 5 min sobre `/api/health` y `/api/ready`, alerta por email. **Nunca se ha provocado una caída para comprobar que la alerta llega** — hacerlo un día tranquilo pausando un deploy.
 - **Incidentes:** procedimiento paso a paso en `docs/INCIDENT_RESPONSE.md`.
 
 ## 9. Secretos
@@ -102,6 +102,54 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 - Viven en **Vercel → Project → Settings → Environment Variables** (no en el repo). `.env.local` está gitignored.
 - Esquema completo en `.env.example`.
 - **Nunca** pegar secretos en chats, logs, frontend o commits. Si uno se expone → rotarlo.
+- Al ponerlos por CLI, el valor va **en el prompt**, nunca en la línea del comando:
+  `vercel env add NOMBRE production --scope max-ab784c70` y pegar cuando lo pida.
+  Un valor en la línea acaba en el historial del shell, y un placeholder pegado por
+  error acaba en producción (nos pasó el 10-ago-2026 con Turnstile).
+- `vercel env pull` escribe **todos** los secretos a disco. Borrar el archivo al terminar.
+
+### Cómo rotar una clave sin tirar producción
+
+El orden importa. Siempre: **crear la nueva → ponerla en Vercel → redeploy → verificar → revocar la vieja.**
+Revocar antes de desplegar deja producción sin credencial válida.
+
+Verificar después de cada una: `/api/ready` en 200, y la función concreta que usa esa clave.
+
+| Clave | Radio de daño si falla | Nota |
+|---|---|---|
+| `REPLICATE_API_TOKEN` | Render fotorrealista | Seguro |
+| `ANTHROPIC_API_KEY` | Análisis y generador de recintos | Seguro |
+| `RESEND_WEBHOOK_SECRET` | Métricas de campañas | Seguro |
+| `CRON_SECRET` | Los 3 crons + `/api/debug/error` | Generar con `openssl rand -hex 32 \| pbcopy` |
+| `RESEND_API_KEY` | **Entrega de boletos por correo** | Verificar con una compra de prueba |
+| `STRIPE_WEBHOOK_SECRET` | **Confirmación de pagos** | Stripe da periodo de gracia al rotar |
+| `STRIPE_SECRET_KEY` | **El cobro entero** | Stripe da periodo de gracia al rotar |
+| `SUPABASE_SERVICE_ROLE_KEY` | **Todo**, ver abajo | Requiere ventana planificada |
+
+**Antes de rotar `SUPABASE_SERVICE_ROLE_KEY`**, dos cosas que no son obvias:
+
+1. En el esquema JWT clásico, rotarla **invalida también la anon key y cierra la sesión de todos los organizadores**.
+2. Firma los enlaces de baja de los correos ya enviados (ver §11). Poner el valor viejo en
+   `UNSUBSCRIBE_SECRET_LEGACY` **antes** de rotar, o esos enlaces dejan de funcionar.
+
+## 11. Enlaces de baja (anti-spam)
+
+`src/lib/email/unsubscribe.ts` firma y verifica los enlaces de "darse de baja".
+Los correos ya enviados llevan la firma impresa y no se pueden reescribir, así que
+**el primer secreto firma y todos verifican**: eso permite rotar sin invalidar lo enviado.
+
+Orden de secretos: `UNSUBSCRIBE_SECRET` → `QUEUE_SECRET` → `SUPABASE_SERVICE_ROLE_KEY` → `UNSUBSCRIBE_SECRET_LEGACY`.
+Sin variables nuevas, el comportamiento es idéntico al histórico.
+
+Para desacoplarlo de Supabase (recomendado antes de rotar esa clave):
+
+1. `UNSUBSCRIBE_SECRET` = valor nuevo aleatorio (`openssl rand -hex 32`).
+2. `UNSUBSCRIBE_SECRET_LEGACY` = el valor **actual** de `SUPABASE_SERVICE_ROLE_KEY`.
+3. Redeploy. Los enlaces nuevos usan el secreto dedicado; los viejos siguen validando.
+4. Ya se puede rotar Supabase libremente.
+5. Pasadas unas semanas, cuando las campañas viejas estén muertas, borrar `UNSUBSCRIBE_SECRET_LEGACY`.
+
+Un enlace de baja roto no es cosmético: las leyes anti-spam exigen que funcione.
 
 ## 10. Idempotencia (procesos que pueden repetirse)
 

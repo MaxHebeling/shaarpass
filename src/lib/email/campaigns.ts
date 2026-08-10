@@ -1,14 +1,10 @@
 import { Resend } from "resend";
-import { createHmac } from "crypto";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { unsubSig } from "@/lib/email/unsubscribe";
 
-function secret(): string {
-  return process.env.QUEUE_SECRET || process.env.SUPABASE_SERVICE_ROLE_KEY || "shaarpass";
-}
-/** Firma del enlace de baja, para que solo se pueda dar de baja un correo válido. */
-export function unsubSig(email: string): string {
-  return createHmac("sha256", secret()).update(`unsub:${email.toLowerCase()}`).digest("hex").slice(0, 24);
-}
+// La firma de baja vive ahora en su propio módulo (src/lib/email/unsubscribe.ts).
+// Se re-exporta para no romper lo que ya la importaba desde aquí.
+export { unsubSig, verifyUnsubSig } from "@/lib/email/unsubscribe";
 
 /** Envía un email a una lista de destinatarios (uno por uno, sin exponerse entre sí).
  *  Filtra a quienes se dieron de baja y agrega enlace de baja (anti-spam).
