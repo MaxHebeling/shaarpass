@@ -1,8 +1,8 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-**13 de 13 ítems cerrados** 🎉 (última actualización: 10-ago-2026). Blindaje de confiabilidad completo.
-Pendientes menores no bloqueantes: Stripe test real en staging (hoy placeholders); rotar `REPLICATE_API_TOKEN`
-si se pegó en chat; clic en *Test Notification* de UptimeRobot para validar la alerta en vivo.
+**13 de 13 ítems cerrados** 🎉 (última actualización: 10-ago-2026). Blindaje de confiabilidad completo,
+alerta validada en vivo y `REPLICATE_API_TOKEN` rotado. Pendientes menores no bloqueantes: Stripe test real
+en staging (hoy placeholders) e instalar la app de UptimeRobot para push en el móvil.
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -137,11 +137,10 @@ Esto es un **piso operativo, no una foto**: se mantiene solo mientras el monitor
 sigan vivos. Un tablero verde sin nadie mirando las alertas se degrada solo. Lo ya hecho (CI, tests, health,
 captura de errores, timeouts, idempotencia, migraciones al día, runbooks) es la base permanente.
 
-Dos cosas que hoy están **configuradas pero no probadas**, y conviene no confundirlas con "resueltas":
+Las dos cosas que antes estaban "configuradas pero no probadas" ya se **validaron de verdad**:
 
-1. **La alerta de caída nunca ha sonado.** Los monitores están verdes, pero verde solo demuestra que el sitio
-   está arriba, no que el aviso llegue cuando se caiga. Pausa un deploy algún día tranquilo y compruébalo.
-2. **El backup nunca se ha restaurado** (ítem 4). Sigue siendo el mayor riesgo real del proyecto.
+1. **La alerta SÍ llega** — probada con *Test Notification* de UptimeRobot (10-ago-2026), llegó al email.
+2. **El restore SÍ funciona** — ensayado restaurando el backup a un proyecto nuevo (ítem 4), datos exactos.
 
-**Orden recomendado ahora:** ítem **4** (ensayar el restore — el riesgo más grande), luego **6** (rotar las
-claves que pasaron por chat) y **5** (staging, para dejar de validar cambios grandes en producción).
+**Pendientes menores no bloqueantes:** Stripe test real en staging (hoy placeholders); instalar la app de
+UptimeRobot para push en el móvil (el email es registro, no alarma que suene de madrugada).
