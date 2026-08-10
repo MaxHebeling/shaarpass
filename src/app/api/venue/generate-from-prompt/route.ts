@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchWithTimeout } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -31,7 +32,7 @@ export async function POST(req: Request) {
     : `Espacio actual (${W}m × ${L}m) con estas zonas: ${(b.currentZones || []).map((z: { name: string }) => z.name).join(", ") || "ninguna"}.\nInstrucción del usuario: "${prompt}"\nDevuelve SOLO este JSON con las zonas a AGREGAR (no repitas las existentes): {"summary": "qué hiciste", "zonesToAdd": [zona, ...]}.\n${schema}`;
 
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    const resp = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({ model: MODEL, max_tokens: 2200, system: sys, messages: [{ role: "user", content: userMsg }] }),

@@ -11,6 +11,9 @@
     "typecheck": "tsc --noEmit",
     "test": "vitest run"
   },
+  "engines": {
+    "node": ">=20"
+  },
   "dependencies": {
     "@stripe/react-stripe-js": "^6.5.0",
     "@stripe/stripe-js": "^9.7.0",

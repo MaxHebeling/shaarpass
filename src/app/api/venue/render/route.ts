@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchWithTimeout } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
 
   const headers = { Authorization: `Bearer ${token}`, "content-type": "application/json", Prefer: "wait" };
   try {
-    const start = await fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
+    const start = await fetchWithTimeout(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
       method: "POST", headers,
       body: JSON.stringify({ input: { prompt, aspect_ratio: ar, num_outputs: 1, output_format: "webp", output_quality: 90 } }),
     });
@@ -37,7 +38,7 @@ export async function POST(req: Request) {
     // Si aún no terminó (Prefer: wait expiró), sondea el resultado.
     for (let i = 0; i < 10 && (pred.status === "starting" || pred.status === "processing"); i++) {
       await new Promise((r) => setTimeout(r, 1500));
-      const poll = await fetch(pred.urls?.get, { headers: { Authorization: `Bearer ${token}` } });
+      const poll = await fetchWithTimeout(pred.urls?.get, { headers: { Authorization: `Bearer ${token}` } }, 20_000);
       pred = await poll.json();
     }
     if (pred.status === "failed" || pred.status === "canceled") return NextResponse.json({ error: pred.error || "La IA falló al generar" }, { status: 502 });

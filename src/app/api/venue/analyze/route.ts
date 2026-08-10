@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { fetchWithTimeout } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -27,7 +28,7 @@ export async function POST(req: Request) {
   // Descarga la imagen y la pasa como base64 (Claude vision).
   let dataB64 = "", mediaType = "image/jpeg";
   try {
-    const r = await fetch(imageUrl);
+    const r = await fetchWithTimeout(imageUrl, {}, 20_000);
     if (!r.ok) throw new Error("no se pudo descargar la imagen");
     mediaType = r.headers.get("content-type") || "image/jpeg";
     if (!/^image\/(jpeg|png|webp|gif)$/.test(mediaType)) mediaType = "image/jpeg";
@@ -56,7 +57,7 @@ Devuelve ÚNICAMENTE un objeto JSON válido (sin texto adicional, sin markdown) 
 Sé realista: usa las medidas dadas para la capacidad; si la foto es ambigua, dilo en shapeNotes.`;
 
   try {
-    const resp = await fetch("https://api.anthropic.com/v1/messages", {
+    const resp = await fetchWithTimeout("https://api.anthropic.com/v1/messages", {
       method: "POST",
       headers: { "x-api-key": key, "anthropic-version": "2023-06-01", "content-type": "application/json" },
       body: JSON.stringify({
