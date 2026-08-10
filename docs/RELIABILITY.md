@@ -78,8 +78,9 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 
 ## 8. Monitoring, error tracking y alertas (estado)
 
-- **Hoy:** Vercel Analytics + Speed Insights + health checks. **Sin** error tracking ni alertas.
-- **Pendiente (config externa):** Sentry (`SENTRY_DSN`) + uptime monitor apuntando a `/api/health` + canal de alerta. Ver `docs/ENVIRONMENT.md` y el reporte de confiabilidad.
+- **Hoy:** Vercel Analytics + Speed Insights + health checks + smoke workflow (`.github/workflows/smoke.yml`, corre tras cada deploy y cada 30 min) + captura estructurada de errores (`lib/log.ts` + `instrumentation.ts`, con `errorId` correlacionable).
+- **Pendiente (config externa):** Sentry (`SENTRY_DSN` — el código ya tiene el punto de integración en `captureError`) + uptime monitor externo + canal de alerta. Ver `docs/ENVIRONMENT.md`.
+- **Incidentes:** procedimiento paso a paso en `docs/INCIDENT_RESPONSE.md`.
 
 ## 9. Secretos
 
