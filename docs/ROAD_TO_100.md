@@ -1,8 +1,8 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-**9 de 13 ítems cerrados** (última actualización: 10-ago-2026).
-Cerrados: 1, 2, 3, 4, 7, 8, 9, 10, 12. Quedan: **5** (staging), **6** (rotar secretos),
-**11** (auto-rollback, código listo, falta el token), **13** (SLO).
+**10 de 13 ítems cerrados** (última actualización: 10-ago-2026).
+Cerrados: 1, 2, 3, 4, 5, 7, 8, 9, 10, 12. Quedan: **6** (rotar secretos, ahora incluye las 2 DB
+passwords), **11** (auto-rollback: código en `main`, falta solo poner `VERCEL_TOKEN`), **13** (SLO).
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -62,14 +62,17 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
     tu destino de respaldo; ver `RELIABILITY.md §7`. Automatizar el envío a un destino externo queda
     como mejora futura.
 
-- [~] **5. Entorno de staging** 🔑+🧑‍💻 — **BD de staging LISTA y verificada.** Proyecto Supabase
-  `shaarpass-staging` (ref `ijakjbpefnnausjqiimd`, us-east-1) creado y **cargado con el baseline**:
-  reproduce prod exacto (42 tablas / 56 funciones / 50 policies / 11 storage / 3 buckets / 5 cron).
-  Runbook completo en `docs/STAGING.md`. **Falta tuyo (1 paso, en la web):** crear la rama `staging`
-  en Vercel + poner las variables de staging (scope Preview) apuntando a este proyecto, con llaves
-  **de prueba** de Stripe. Guía exacta en `docs/STAGING.md §3`.
-  - **Por qué:** validar cambios grandes (migraciones, checkout) sin tocar producción.
-  - **Verificar:** push a `staging` → preview con su BD; `GET /api/ready` de staging en `database:ok`.
+- [x] **5. Entorno de staging** 🔑+🧑‍💻 · *cerrado 10-ago-2026* — **operativo y verificado.**
+  Proyecto Supabase `shaarpass-staging` (ref `ijakjbpefnnausjqiimd`, us-east-1) cargado con el baseline
+  (reproduce prod exacto: 42/56/50/11/3/5). Rama `staging` en Vercel con las **11 variables** en scope
+  **Preview** (Supabase staging + APP_URL de rama + CRON generado). Deploy `staging` **READY**.
+  Validado: `database:ok` (query de readiness contra la BD de staging) y `config:ok` (11 vars presentes).
+  El `/api/ready` HTTP vive detrás de Vercel SSO (bueno para staging); se validaron sus dos chequeos
+  directamente. Runbook: `docs/STAGING.md`.
+  - **Pendiente menor (no bloquea):** Stripe en Preview son **placeholders** `sk_test`/`pk_test` — hacen
+    pasar `config:ok`, pero para probar un cobro real en staging hay que poner llaves test reales.
+  - **Verificar tú mismo:** abre `https://shaarpass-git-staging-max-ab784c70.vercel.app/api/ready` en el
+    navegador (logueado en Vercel el SSO pasa solo) → `database:ok`, `config:ok`.
 
 - [ ] **6. Rotar secretos expuestos** 🔑 · *+3*
   - **Dónde:** consola de cada proveedor (Replicate, y cualquier clave pegada en chat) → generar nueva → actualizar en Vercel env → redeploy.
