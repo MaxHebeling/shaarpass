@@ -108,7 +108,7 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 
 - **Hoy:** Vercel Analytics + Speed Insights + health checks + smoke workflow (`.github/workflows/smoke.yml`, corre tras cada deploy y cada 30 min) + captura estructurada de errores (`lib/log.ts` + `instrumentation.ts`, con `errorId` correlacionable).
 - **Sentry:** SDK integrado en servidor y edge (`sentry.server.config.ts` / `sentry.edge.config.ts`), inerte sin `SENTRY_DSN`. Cada evento lleva el tag `errorId`, el mismo que sale en los logs de Vercel. Comprobar con `/api/debug/error` (§5). No cubre errores de navegador.
-- **Uptime:** UptimeRobot, 2 monitores cada 5 min sobre `/api/health` y `/api/ready`, alerta por email. Validar el canal con el botón **Test Notification** del monitor.
+- **Uptime:** UptimeRobot, 2 monitores cada 5 min sobre `/api/health` y `/api/ready`, alerta por email — **canal validado** con *Test Notification* (10-ago-2026, el email llegó). Para que suene de madrugada, instalar la app de UptimeRobot (push).
 - **Auto-rollback:** el job `rollback` de `smoke.yml` está **armado** (`VERCEL_TOKEN` en GitHub) — revierte prod si `/api/ready` queda en rojo tras un deploy.
 - **Incidentes:** procedimiento paso a paso en `docs/INCIDENT_RESPONSE.md`.
 
