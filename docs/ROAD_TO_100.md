@@ -1,31 +1,47 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-Estado actual: **80/100** (last known good: commit servido en `/api/health`).
-El Bloque 2 (ítems 7–10) ya está hecho, pero **no suma puntos hasta que el Bloque 1 esté listo**:
-sin monitoreo ni alertas, un Sentry sin DSN y un rate limit sin Upstash son código dormido.
+**8 de 13 ítems cerrados** (última actualización: 10-ago-2026).
+Cerrados: 1, 2, 3, 7, 8, 9, 10, 12. Quedan: **4** (PITR), **5** (staging), **6** (rotar secretos),
+**11** (auto-rollback), **13** (SLO).
+
+A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
+métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
+
+- Los errores de servidor llegan a Sentry con un `errorId` que cruza con los logs de Vercel.
+- Dos monitores externos vigilan `/api/health` y `/api/ready` cada 5 min y alertan por email.
+- `main` no acepta nada que no venga por PR con el check `verify` en verde.
+- 101 pruebas automáticas, incluido el flujo de pago completo y el boundary de auth.
+
+El riesgo grande que sigue abierto es el **ítem 4**: nunca se ha ensayado un restore.
 
 Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude en el repo cuando digas.
 
-Marca `[x]` conforme completes. Los 6 del Bloque 1 dan el salto grande (→ ~95).
-
 ---
 
-## 🔴 Bloque 1 — Lo que solo tú puedes hacer (80 → ~95)
+## 🔴 Bloque 1 — Lo que solo tú puedes hacer
 
-- [ ] **1. Branch protection en `main`** 🔑 · *+4*
-  - **Dónde:** GitHub → repo `MaxHebeling/shaarpass` → Settings → Branches → Add branch ruleset → Require status checks to pass → marcar **CI**.
-  - **Por qué:** hace obligatorio el NO TEST → NO MERGE (hoy es convención, no barrera).
-  - **Verificar:** abre un PR con un test roto → GitHub no deja hacer merge.
+- [x] **1. Branch protection en `main`** 🔑 · *hecho 10-ago-2026*
+  - Ruleset **`main protegida — CI obligatorio`**, Active, **bypass list vacía** (nadie la salta, tú incluido).
+  - Exige: pull request (0 aprobaciones, para no bloquearte al trabajar solo), que pase el check
+    `verify`, y bloquea force push y borrado de `main`.
+  - **Verificado:** en el PR #3 el check aparece como `Required` y el botón de merge queda gris
+    hasta que pasa. Ya no se puede pushear directo a `main`.
 
-- [ ] **2. Sentry (error tracking)** 🔑+🧑‍💻 · *+5*
-  - **Dónde:** crea proyecto en sentry.io → copia el `SENTRY_DSN` → Vercel → proyecto `shaarpass` → Settings → Environment Variables → añádelo (`printf "%s" "<dsn>" | vercel env add SENTRY_DSN production --scope max-ab784c70`).
-  - **Por qué:** el código ya llama `captureError` con `errorId`; solo falta el destino. Hoy los 500 solo se ven en logs de Vercel.
-  - **Verificar:** avísame con el DSN puesto → integro el SDK; luego un error de prueba aparece en Sentry con su `errorId`.
+- [x] **2. Sentry (error tracking)** 🔑+🧑‍💻 · *hecho 10-ago-2026*
+  - `SENTRY_DSN` en Vercel (production) + SDK integrado en servidor y edge.
+  - **Verificado de punta a punta:** el `errorId` que devuelve `/api/debug/error` apareció en Sentry
+    (proyecto `SHAARPASS-1`) y los dos caminos funcionan — captura directa y `onRequestError`.
+  - **No cubierto:** errores de navegador. Requeriría `NEXT_PUBLIC_SENTRY_DSN` y sumar el SDK al
+    bundle del cliente (~40 kB en cada carga). Decisión consciente, no olvido.
 
-- [ ] **3. Uptime monitor + alerta** 🔑 · *+4*
-  - **Dónde:** UptimeRobot o BetterStack → 2 monitores HTTP: `https://www.shaarpass.io/api/health` y `/api/ready` (cada 1–5 min) → canal de alerta (email/WhatsApp/Slack).
-  - **Por qué:** que alguien se entere de una caída al instante, no en 30 min (el smoke de GitHub es el respaldo, no la alerta).
-  - **Verificar:** pausa un deploy de prueba en Vercel → debe llegarte la alerta.
+- [x] **3. Uptime monitor + alerta** 🔑 · *hecho 10-ago-2026*
+  - UptimeRobot, dos monitores HTTP cada 5 min: **ShaarPass — health** y **ShaarPass — ready**.
+  - El de `ready` es el que importa: da 503 si la BD o la config fallan aunque la app responda.
+  - Alerta por email a `maxhebeling@gmail.com`.
+  - **Pendiente tuyo:** instalar la app de UptimeRobot y activar el push. Sin eso, una caída de
+    madrugada te espera hasta el desayuno — el email es registro, no alarma.
+  - **Sin verificar todavía:** nunca se ha provocado una caída real para ver si la alerta llega.
+    Pausa un deploy en Vercel algún día tranquilo y compruébalo.
 
 - [ ] **4. Verificar PITR + ENSAYAR un restore** 🔑 · *+6*
   - **Dónde:** Supabase → proyecto `abkzfztzavrsglowwkkw` → Database → Backups. Confirma que PITR está activo (según plan). Restaura a un proyecto de prueba.
@@ -41,6 +57,10 @@ Marca `[x]` conforme completes. Los 6 del Bloque 1 dan el salto grande (→ ~95)
   - **Dónde:** consola de cada proveedor (Replicate, y cualquier clave pegada en chat) → generar nueva → actualizar en Vercel env → redeploy.
   - **Por qué:** toda clave que pasó por un chat se considera comprometida.
   - **Verificar:** la clave vieja da 401; la app sigue sana en `/api/ready`.
+  - **Nota:** el `SENTRY_DSN` **no** entra aquí. Un DSN es público por diseño (solo permite enviar
+    eventos, no leer), va embebido en el JS del cliente de cualquier app. No hay que rotarlo.
+  - **Sí entra:** si en algún momento generas `.env.production.local` con `vercel env pull`, ese
+    archivo tiene todos tus secretos en disco. Está en `.gitignore`, pero bórralo al terminar.
 
 ---
 
@@ -67,17 +87,29 @@ Marca `[x]` conforme completes. Los 6 del Bloque 1 dan el salto grande (→ ~95)
 ## 🟡 Bloque 3 — Robustez fina (~99 → 100)
 
 - [ ] **11. Smoke con auto-rollback** 🔑+🧑‍💻 — requiere un `VERCEL_TOKEN` como secret de GitHub; con él, el smoke revierte prod solo si queda roja.
-- [ ] **12. Dependabot** 🔑 — GitHub → Settings → Code security → Enable Dependabot (1 clic). PRs de seguridad automáticos.
-  **Sube de prioridad:** el 10-ago-2026, un `npm audit` de rutina destapó que Next 16.2.7 arrastraba 9 avisos, uno de
+- [x] **12. Dependabot** 🔑 · *hecho 10-ago-2026* — activados: dependency graph, alerts, malware alerts,
+  security updates y grouped updates (agrupa los PRs para que no te inunden). Dejamos fuera *version updates*,
+  que exige un `dependabot.yml` y genera mucho más ruido.
+  **Por qué subió de prioridad:** ese mismo día, un `npm audit` de rutina destapó que Next 16.2.7 arrastraba 9 avisos, uno de
   ellos un bypass de middleware/proxy en App Router con Turbopack ([GHSA-6gpp-xcg3-4w24](https://github.com/advisories/GHSA-6gpp-xcg3-4w24))
   — justo el mecanismo que protege `/dashboard`. Llevaba semanas ahí sin que nada avisara. Se resolvió subiendo a
-  Next 16.3.0 + postcss (`npm audit` en 0). Dependabot es lo que hace que la próxima vez el aviso llegue solo.
+  Next 16.3.0 + postcss (`npm audit` en 0). Al activarlo, Dependabot confirmó por su cuenta las mismas 14 alertas
+  contra `main`. Es lo que hace que la próxima vez el aviso llegue solo, en lugar de por casualidad.
 - [ ] **13. SLO + presupuesto de errores** 🔑 — definir objetivo (ej. 99.9% en `/api/ready`) una vez haya monitoreo del ítem 3.
 
 ---
 
 ## Nota honesta
 
-100/100 es un **piso operativo, no una foto**: se mantiene solo mientras el monitoreo, las alertas y el staging sigan vivos. Un 100 sin nadie mirando las alertas vuelve a bajar solo. Lo ya hecho (CI, tests, health, captura de errores, timeouts, idempotencia, migraciones al día, runbooks) es la base permanente sobre la que se apoya todo esto.
+Esto es un **piso operativo, no una foto**: se mantiene solo mientras el monitoreo, las alertas y el staging
+sigan vivos. Un tablero verde sin nadie mirando las alertas se degrada solo. Lo ya hecho (CI, tests, health,
+captura de errores, timeouts, idempotencia, migraciones al día, runbooks) es la base permanente.
 
-**Orden recomendado:** haz *ya* los ítems **1** y **3** (15 min, cero código) y consígueme el **DSN de Sentry** (ítem 2). Con eso arranco los ítems 🧑‍💻 en paralelo.
+Dos cosas que hoy están **configuradas pero no probadas**, y conviene no confundirlas con "resueltas":
+
+1. **La alerta de caída nunca ha sonado.** Los monitores están verdes, pero verde solo demuestra que el sitio
+   está arriba, no que el aviso llegue cuando se caiga. Pausa un deploy algún día tranquilo y compruébalo.
+2. **El backup nunca se ha restaurado** (ítem 4). Sigue siendo el mayor riesgo real del proyecto.
+
+**Orden recomendado ahora:** ítem **4** (ensayar el restore — el riesgo más grande), luego **6** (rotar las
+claves que pasaron por chat) y **5** (staging, para dejar de validar cambios grandes en producción).
