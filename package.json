@@ -15,6 +15,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.69.0",
     "@stripe/react-stripe-js": "^6.5.0",
     "@stripe/stripe-js": "^9.7.0",
     "@supabase/ssr": "^0.5.2",

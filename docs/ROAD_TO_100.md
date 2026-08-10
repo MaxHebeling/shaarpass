@@ -1,6 +1,9 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
 Estado actual: **80/100** (last known good: commit servido en `/api/health`).
+El Bloque 2 (ítems 7–10) ya está hecho, pero **no suma puntos hasta que el Bloque 1 esté listo**:
+sin monitoreo ni alertas, un Sentry sin DSN y un rate limit sin Upstash son código dormido.
+
 Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude en el repo cuando digas.
 
 Marca `[x]` conforme completes. Los 6 del Bloque 1 dan el salto grande (→ ~95).
@@ -43,10 +46,23 @@ Marca `[x]` conforme completes. Los 6 del Bloque 1 dan el salto grande (→ ~95)
 
 ## 🟠 Bloque 2 — Código que hace Claude (avísame) (~95 → ~99)
 
-- [ ] **7. Rate limiting con Upstash** 🧑‍💻 en rutas públicas (`lead`, `promo/validate`, `queue/join`), con degradación graciosa si Upstash no está configurado.
-- [ ] **8. Cobertura E2E del checkout Stripe** 🧑‍💻 con webhooks mockeados (hoy cubro la lógica de fees, no el flujo de pago completo).
-- [ ] **9. Integrar el SDK de Sentry** 🧑‍💻 (depende del ítem 2: necesito el DSN puesto).
-- [ ] **10. Localizar `/precios` a MXN** 🧑‍💻 — hoy los ejemplos están en USD con matemática Stripe-US y no cuadran con el cobro real en pesos.
+- [x] **7. Rate limiting con Upstash** 🧑‍💻 — `src/lib/rateLimit.ts`: Upstash → RPC `hit_rate_limit` → fail-open,
+  con cabecera `Retry-After`. Aplicado en `lead`, `promo/validate` (antes no tenía ninguno), `queue/join` y `checkout`.
+  Se enciende solo al poner `UPSTASH_REDIS_REST_URL`/`_TOKEN`; sin ellas se comporta igual que antes.
+  *Pendiente menor:* faltan por migrar al helper `season-checkout`, `resale/checkout` y las tres de `ticket/*`.
+- [x] **8. Cobertura E2E del checkout Stripe** 🧑‍💻 — 32 pruebas sobre las rutas HTTP reales con Stripe y Supabase
+  mockeados (`src/test/fakeSupabase.ts`): validación, rate limit, idempotencia, precios autoritativos desde la BD,
+  límite por comprador, cola y presale, evento gratis; y en el webhook: firma, idempotencia, 500 para que Stripe
+  reintente, reventa, abonos y `account.updated`. Verificadas por mutación: romper el cálculo del fee las pone en rojo.
+- [x] **9. Integrar el SDK de Sentry** 🧑‍💻 — `@sentry/nextjs` cableado en servidor y edge, con el mismo `errorId`
+  como tag para cruzar Sentry ↔ logs de Vercel. **Inerte sin DSN**: se puede mergear ya y no hace nada hasta que
+  pongas `SENTRY_DSN` en Vercel (ítem 2) y redespliegues. Detalle en `docs/ENVIRONMENT.md`.
+  *No incluido:* errores de navegador (requiere `NEXT_PUBLIC_SENTRY_DSN` y sumar el SDK al bundle del cliente).
+- [x] **10. Localizar `/precios` a MXN** 🧑‍💻 — todo en pesos con matemática Stripe MX (3.6% + $3) y comparación
+  contra las tarifas **publicadas de Eventbrite México** (3.99% de servicio + 2% de procesamiento) en vez de las de
+  EE. UU. **Hallazgo:** con cifras mexicanas Eventbrite sale más barato para el comprador por debajo de ~$1,200
+  por boleto; la página ahora lo dice en vez de esconderlo y apoya el argumento en lo verificable (100% del precio
+  al organizador el mismo día, fee desglosado antes de pagar, reventa topada al precio original).
 
 ## 🟡 Bloque 3 — Robustez fina (~99 → 100)
 

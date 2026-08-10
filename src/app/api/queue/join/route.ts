@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createPublicClient } from "@/lib/supabase/public";
 import { verifyTurnstile } from "@/lib/turnstile";
 import { isEdgeQueue, edgeJoin } from "@/lib/queue/edge";
+import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -18,16 +19,21 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Verificación anti-bot fallida" }, { status: 403 });
   }
 
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const ip = clientIp(req);
   const ua = req.headers.get("user-agent") ?? "";
   const identity = createHash("sha256").update(`${ip}|${ua}|${parsed.data.eventId}`).digest("hex");
   const token = crypto.randomUUID();
 
   const db = createPublicClient();
 
-  // Rate limit: máx 20 intentos de unirse / minuto por IP.
-  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `join:${ip}`, p_max: 20, p_window_seconds: 60 });
-  if (rlOk === false) return NextResponse.json({ error: "Demasiados intentos, espera un momento" }, { status: 429 });
+  // Rate limit: máx 20 intentos de unirse / minuto por IP (Upstash → Postgres → fail-open).
+  const rl = await rateLimit({ key: `join:${ip}`, max: 20, windowSeconds: 60, db });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Demasiados intentos, espera un momento" },
+      { status: 429, headers: retryAfterHeaders(rl) },
+    );
+  }
 
   // Escala masiva: cola en el edge (Upstash) si está configurada.
   if (isEdgeQueue()) {
