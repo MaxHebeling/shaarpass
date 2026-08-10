@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Plus, ExternalLink, Calendar, TrendingUp, Ticket as TicketIcon } from "lucide-react";
+import { Plus, ExternalLink, Calendar, TrendingUp, Ticket as TicketIcon, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { money } from "@/lib/money";
 import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
@@ -78,6 +78,21 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
     const { data: org } = await db.from("organizations").select("stripe_account_id, payouts_enabled").eq("id", orgIds[0]).maybeSingle();
     payoutsEnabled = !!(org?.stripe_account_id && org?.payouts_enabled);
   }
+
+  // ¿Hay eventos PUBLICADOS con boletos de PAGO? Si sí y aún no hay pagos conectados,
+  // esos eventos NO pueden cobrar: el checkout devuelve 409 al comprador. Avisar fuerte.
+  let hasPaidPublished = false;
+  const publishedIds = events.filter((e) => e.status === "published").map((e) => e.id);
+  if (publishedIds.length) {
+    const { count } = await db
+      .from("ticket_types")
+      .select("id", { count: "exact", head: true })
+      .in("event_id", publishedIds)
+      .gt("price_cents", 0);
+    hasPaidPublished = (count ?? 0) > 0;
+  }
+  const needsPayments = hasPaidPublished && !payoutsEnabled;
+
   const onboarded = hasPublished && hasTickets;
   const manageHref = events[0] ? `/dashboard/eventos/${events[0].id}` : null;
 
@@ -95,6 +110,23 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
           <Plus className="h-4 w-4" /> Crear evento
         </Link>
       </div>
+
+      {needsPayments && (
+        <Link
+          href="/dashboard/pagos"
+          className="mb-6 flex items-start gap-3 rounded-2xl border border-amber-500/40 bg-amber-500/10 p-4 transition hover:bg-amber-500/15"
+        >
+          <AlertTriangle className="mt-0.5 h-5 w-5 shrink-0 text-amber-400" />
+          <div>
+            <p className="font-semibold text-fg">Conecta tus pagos para poder cobrar</p>
+            <p className="mt-0.5 text-sm text-muted">
+              Tienes eventos de pago publicados, pero aún no reciben dinero: el checkout rechazará las
+              compras hasta que conectes tu cuenta.{" "}
+              <span className="font-medium text-amber-300">Conectar ahora →</span>
+            </p>
+          </div>
+        </Link>
+      )}
 
       {(!onboarded || forceOnboarding) && (
         <OnboardingChecklist

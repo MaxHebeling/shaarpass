@@ -1,4 +1,5 @@
-import { CheckCircle2, AlertCircle, Zap, Wallet } from "lucide-react";
+import Link from "next/link";
+import { CheckCircle2, AlertCircle, Zap, Wallet, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrg } from "@/lib/org";
 import { ConnectButton } from "@/components/dashboard/ConnectButton";
@@ -8,6 +9,38 @@ export const dynamic = "force-dynamic";
 export default async function PagosPage() {
   const db = await createClient();
   const org = await getUserOrg(db);
+
+  // Sin organización todavía: la org se crea al publicar el primer evento. Guiar
+  // en vez de mostrar el botón "Conectar" (que respondería 401 "Sin organización").
+  if (!org) {
+    return (
+      <div className="mx-auto max-w-2xl">
+        <h1 className="font-display text-3xl font-bold">Pagos</h1>
+        <p className="mt-1 text-sm text-muted">Conecta tu cuenta para recibir el dinero de tus ventas.</p>
+        <div className="glass mt-8 rounded-3xl p-7">
+          <div className="flex items-start gap-4">
+            <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl brand-gradient text-ink">
+              <Calendar className="h-6 w-6" />
+            </span>
+            <div className="flex-1">
+              <h2 className="font-display text-xl font-semibold">Primero crea tu evento</h2>
+              <p className="mt-1 text-sm text-muted">
+                Tu organización se activa al crear tu primer evento. Créalo y vuelve aquí para conectar
+                tus pagos y empezar a cobrar.
+              </p>
+              <Link
+                href="/dashboard/new"
+                className="brand-gradient mt-5 inline-flex items-center gap-2 rounded-full px-6 py-2.5 text-sm font-semibold text-ink"
+              >
+                Crear mi primer evento
+              </Link>
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   const connected = Boolean(org?.stripe_account_id);
   const enabled = Boolean(org?.payouts_enabled);
 
