@@ -87,7 +87,11 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
 
 ## 🟡 Bloque 3 — Robustez fina (~99 → 100)
 
-- [ ] **11. Smoke con auto-rollback** 🔑+🧑‍💻 — requiere un `VERCEL_TOKEN` como secret de GitHub; con él, el smoke revierte prod solo si queda roja.
+- [~] **11. Smoke con auto-rollback** 🔑+🧑‍💻 — **código listo e inerte** (job `rollback` en `smoke.yml`).
+  Solo se dispara cuando el smoke falla **tras un deploy** (no en los chequeos programados), **reconfirma 3 veces**
+  antes de actuar (no revierte por un blip) y **no hace nada sin `VERCEL_TOKEN`**. **Falta tuyo:** crear el token
+  en Vercel (Account → Settings → Tokens, scope `max-ab784c70`) y ponerlo como secret `VERCEL_TOKEN` en GitHub
+  (repo → Settings → Secrets and variables → Actions). Al ponerlo, el auto-rollback se activa solo.
 - [x] **12. Dependabot** 🔑 · *hecho 10-ago-2026* — activados: dependency graph, alerts, malware alerts,
   security updates y grouped updates (agrupa los PRs para que no te inunden). Dejamos fuera *version updates*,
   que exige un `dependabot.yml` y genera mucho más ruido.
