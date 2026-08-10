@@ -9,7 +9,8 @@
     "start": "next start",
     "lint": "next lint",
     "typecheck": "tsc --noEmit",
-    "test": "vitest run"
+    "test": "vitest run",
+    "backup:storage": "node scripts/backup-storage.mjs"
   },
   "engines": {
     "node": ">=20"
