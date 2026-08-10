@@ -6,9 +6,9 @@ import { Footer } from "@/components/landing/Footer";
 import { FeeComparator } from "@/components/landing/FeeComparator";
 
 export const metadata: Metadata = {
-  title: "Precios y comisiones — ShaarPass | La comisión más baja para vender boletos",
+  title: "Precios y comisiones — ShaarPass | Vender boletos en México sin letra chica",
   description:
-    "2% + $0.50 por boleto más procesamiento, todo transparente. Eventos gratis sin comisión, pagos el mismo día y sin retenciones. Compara cuánto te quedas vs Eventbrite.",
+    "2% + $0.50 MXN por boleto, más el procesamiento de la pasarela trasladado al costo. Recibes el 100% del precio el mismo día, eventos gratis sin comisión y reventa topada. Calcula tu caso en pesos.",
   alternates: { canonical: "/precios" },
 };
 
@@ -26,9 +26,10 @@ const included = [
 ];
 
 const rows: { label: string; shaar: string; eb: string; tm: string }[] = [
-  { label: "Comisión de plataforma", shaar: "2% + $0.50", eb: "~3.7% + $1.79", tm: "Opaca (alta)" },
-  { label: "Transparencia del fee", shaar: "Total, antes de pagar", eb: "Parcial", tm: "Cargos ocultos" },
-  { label: "Eventos gratuitos", shaar: "$0", eb: "Variable", tm: "—" },
+  { label: "Comisión de plataforma", shaar: "2% + $0.50 MXN", eb: "3.99% de servicio", tm: "Opaca (alta)" },
+  { label: "Procesamiento de pago", shaar: "Al costo (3.6% + $3), sin margen encima", eb: "2% propio", tm: "Opaco" },
+  { label: "Transparencia del fee", shaar: "Desglosado antes de pagar", eb: "Parcial", tm: "Cargos ocultos" },
+  { label: "Eventos gratuitos", shaar: "$0", eb: "Sin comisión", tm: "—" },
   { label: "Recibes tu dinero", shaar: "Mismo día", eb: "Tras el evento", tm: "Tras el evento" },
   { label: "Anti-reventa abusiva", shaar: "Sí (tope al precio original)", eb: "Limitado", tm: "Cobra en ambos lados" },
   { label: "Soporte humano", shaar: "Sí", eb: "Difícil", tm: "Difícil" },
@@ -44,12 +45,13 @@ export default function PreciosPage() {
             <Wallet className="h-3.5 w-3.5 text-gold" /> Precios honestos
           </div>
           <h1 className="font-display text-4xl font-bold tracking-tight md:text-6xl">
-            Una comisión. <span className="brand-text text-glow">Clara.</span>
+            Las cuentas, <span className="brand-text text-glow">claras.</span>
           </h1>
           <p className="mx-auto mt-5 max-w-xl text-lg text-muted">
-            Cobramos <strong className="text-fg">2% + $0.50 por boleto</strong>, más el costo de procesamiento
-            de pago — y lo ves desglosado antes de publicar. Sin mensualidades, sin letra chica, sin sorpresas.
-            Los <strong className="text-fg">eventos gratuitos no pagan comisión</strong>.
+            Cobramos <strong className="text-fg">2% + $0.50 MXN por boleto</strong>. El procesamiento de pago
+            lo cobra la pasarela y te lo trasladamos <strong className="text-fg">al costo, sin margen encima</strong> —
+            desglosado antes de publicar. Tú recibes el <strong className="text-fg">100% del precio de tu boleto,
+            el mismo día</strong>. Los eventos gratuitos no pagan comisión.
           </p>
           <Link href="/login" className="brand-gradient group mt-8 inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]">
             Crea tu evento gratis <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />
@@ -101,8 +103,11 @@ export default function PreciosPage() {
               </tbody>
             </table>
           </div>
-          <p className="mt-4 text-center text-xs text-muted">
-            Comparación referencial con tarifas públicas de cada plataforma. El procesamiento de pago lo cobra tu pasarela y varía por país.
+          <p className="mx-auto mt-4 max-w-2xl text-center text-xs leading-relaxed text-muted">
+            Comparación referencial con las tarifas publicadas por cada plataforma para México, a la fecha de esta página.
+            Nuestra cifra incluye el costo real de la pasarela; el 2% de procesamiento de Eventbrite es interno y no
+            equivale al costo de una pasarela mexicana. En boletos de precio bajo su tarifa publicada puede salir menor —
+            preferimos que lo compruebes en la calculadora de arriba antes que esconderlo.
           </p>
         </section>
 

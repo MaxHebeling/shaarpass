@@ -15,6 +15,7 @@
     "node": ">=20"
   },
   "dependencies": {
+    "@sentry/nextjs": "^10.69.0",
     "@stripe/react-stripe-js": "^6.5.0",
     "@stripe/stripe-js": "^9.7.0",
     "@supabase/ssr": "^0.5.2",
@@ -27,8 +28,8 @@
     "html5-qrcode": "^2.3.8",
     "lucide-react": "^1.17.0",
     "motion": "^12.40.0",
-    "next": "^16.2.7",
-    "postcss": "^8.5.15",
+    "next": "^16.3.0",
+    "postcss": "^8.5.26",
     "qrcode": "^1.5.4",
     "react": "19.0.0",
     "react-dom": "19.0.0",

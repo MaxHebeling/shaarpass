@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createPublicClient } from "@/lib/supabase/public";
 import { validatePromo } from "@/lib/ticketing/promo";
+import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -16,6 +17,16 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ valid: false, message: "Datos inválidos" }, { status: 400 });
 
   const db = createPublicClient();
+
+  // Anti fuerza bruta de códigos: máx 20 intentos/min por IP.
+  const rl = await rateLimit({ key: `promo:${clientIp(req)}`, max: 20, windowSeconds: 60, db });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { valid: false, message: "Demasiados intentos, espera un momento" },
+      { status: 429, headers: retryAfterHeaders(rl) },
+    );
+  }
+
   const result = await validatePromo(db, parsed.data.eventId, parsed.data.code, parsed.data.subtotalCents);
   return NextResponse.json(result);
 }

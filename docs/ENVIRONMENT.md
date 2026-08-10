@@ -15,11 +15,30 @@ Esquema completo con placeholders: **`.env.example`** (raíz del repo). Aquí, d
 
 ## Opcionales (features)
 `ANTHROPIC_API_KEY` (+`ANTHROPIC_MODEL`), `REPLICATE_API_TOKEN` (+`REPLICATE_MODEL`),
-`UPSTASH_REDIS_REST_URL`/`_TOKEN`/`QUEUE_SECRET` (cola edge), `TURNSTILE_*` (anti-bot),
+`UPSTASH_REDIS_REST_URL`/`_TOKEN`/`QUEUE_SECRET` (cola edge **y rate limiting**), `TURNSTILE_*` (anti-bot),
 `PLATFORM_FEE_*`/`STRIPE_PROCESSING_*` (comisiones), `NEXT_PUBLIC_GOOGLE_SITE_VERIFICATION`.
 
-## Recomendada (pendiente)
-`SENTRY_DSN` — error tracking.
+## Rate limiting (`src/lib/rateLimit.ts`)
+Sin variables extra: reutiliza las de la cola edge. Backends en orden —
+**Upstash** (si hay `UPSTASH_REDIS_REST_URL` + `_TOKEN`) → **Postgres** (RPC `hit_rate_limit`,
+migración 0023) → **fail-open** (permite y deja un `warn` con `backend: "none"`).
+Nunca bloquea una venta por estar caído; el respaldo anti-bot real es Turnstile.
+
+## Error tracking — Sentry
+| Variable | Dónde | Efecto |
+|---|---|---|
+| `SENTRY_DSN` | Vercel (server) | **Enciende Sentry.** Sin ella el SDK no se inicializa y `captureException` es no-op. |
+| `SENTRY_TRACES_SAMPLE_RATE` | opcional | Muestreo de trazas. Default `0.1`. |
+| `SENTRY_AUTH_TOKEN` + `SENTRY_ORG` + `SENTRY_PROJECT` | opcional, build | Sube source maps (stack traces legibles). Sin token no se generan ni se suben. |
+
+Cada error lleva el tag `errorId`, el mismo que aparece en los logs de Vercel: se busca
+el id en Sentry y se cruza con el log estructurado.
+
+Alcance actual: **servidor y edge**. Los errores de navegador (`global-error.tsx`) todavía
+no se envían — requeriría `NEXT_PUBLIC_SENTRY_DSN` y sumar el SDK al bundle del cliente.
+
+Verificar tras poner el DSN: provoca un 500 en cualquier ruta y comprueba que el evento
+aparece en Sentry con el mismo `errorId` que salió en los logs de Vercel.
 
 ## Seguridad
 Nunca en el repo, frontend, logs ni chats. Si se expone una clave → rotarla en el proveedor y en Vercel.

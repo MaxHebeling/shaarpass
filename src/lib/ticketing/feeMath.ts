@@ -1,4 +1,5 @@
 /** Matemática de fees compartida (cliente + servidor + marketing). Pura, sin env. */
+import { money } from "@/lib/money";
 
 export const OUR_PERCENT = 2.0;       // margen de la plataforma
 export const OUR_FIXED_CENTS = 50;    // + $0.50 por boleto
@@ -71,6 +72,7 @@ export function resaleBuyerTotal(priceCents: number, currency = "usd"): number {
 /**
  * Comisión de Eventbrite (US, plan Flex):
  * service 3.7% + $1.79/boleto, + processing 2.9% sobre (subtotal + service).
+ * OJO: son tarifas de Estados Unidos, en dólares. No sirven para comparar en México.
  */
 export function eventbriteFeeCents(subtotalCents: number, ticketCount: number): number {
   if (subtotalCents <= 0) return 0;
@@ -79,5 +81,25 @@ export function eventbriteFeeCents(subtotalCents: number, ticketCount: number): 
   return service + processing;
 }
 
-export const fmt = (cents: number) =>
-  (cents / 100).toLocaleString("en-US", { style: "currency", currency: "USD" });
+/**
+ * Comisión de Eventbrite en MÉXICO, según sus tarifas publicadas para los planes
+ * antiguos (los planes nuevos no están disponibles para organizadores en MX):
+ *   tarifa de servicio 3.99% por boleto + tarifa de procesamiento 2% del pedido.
+ * No publican un cargo fijo por boleto para México.
+ * Fuente: Centro de ayuda de Eventbrite MX — "Tarifas de venta de boletos".
+ *
+ * A diferencia de nosotros, ese 2% es el procesamiento PROPIO de Eventbrite: no
+ * refleja el costo real de la pasarela, que ellos absorben en su margen.
+ */
+export const EVENTBRITE_MX_SERVICE_PCT = 3.99;
+export const EVENTBRITE_MX_PROCESSING_PCT = 2.0;
+
+export function eventbriteMxFeeCents(subtotalCents: number): number {
+  if (subtotalCents <= 0) return 0;
+  const service = Math.round((subtotalCents * EVENTBRITE_MX_SERVICE_PCT) / 100);
+  const processing = Math.round(((subtotalCents + service) * EVENTBRITE_MX_PROCESSING_PCT) / 100);
+  return service + processing;
+}
+
+/** Formato de dinero. Por defecto pesos mexicanos: es el mercado principal. */
+export const fmt = (cents: number, currency = "mxn") => money(cents, currency);

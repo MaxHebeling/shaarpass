@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendBulkEmail } from "@/lib/email/campaigns";
+import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -21,12 +22,17 @@ export async function POST(req: Request) {
   if (!parsed.success) return NextResponse.json({ error: "Datos inválidos" }, { status: 400 });
   const { email, name, message, source } = parsed.data;
 
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
+  const ip = clientIp(req);
   const db = createAdminClient();
 
-  // Rate limit: máx 5 envíos/min por IP.
-  const { data: ok } = await db.rpc("hit_rate_limit", { p_key: `lead:${ip}`, p_max: 5, p_window_seconds: 60 });
-  if (ok === false) return NextResponse.json({ error: "Demasiados envíos, espera un momento" }, { status: 429 });
+  // Rate limit: máx 5 envíos/min por IP (Upstash → Postgres → fail-open).
+  const rl = await rateLimit({ key: `lead:${ip}`, max: 5, windowSeconds: 60, db });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Demasiados envíos, espera un momento" },
+      { status: 429, headers: retryAfterHeaders(rl) },
+    );
+  }
 
   const { error } = await db.from("leads").insert({
     email: email.toLowerCase(),

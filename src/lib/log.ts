@@ -1,10 +1,13 @@
 /**
  * Logging estructurado y punto único de captura de errores.
  *
- * Hoy escribe JSON a stdout (visible en los logs de Vercel, correlacionable).
- * Si en el futuro se configura Sentry (SENTRY_DSN), este es el único lugar que
- * hay que ampliar — el resto del código ya llama a captureError().
+ * Escribe JSON a stdout (visible en los logs de Vercel, correlacionable) y, si
+ * Sentry está inicializado —solo ocurre cuando existe SENTRY_DSN, ver
+ * sentry.server.config.ts—, envía además la excepción con el mismo `errorId`.
+ * Sin DSN, `Sentry.captureException` es un no-op: ni red, ni coste, ni ruido.
  */
+import * as Sentry from "@sentry/nextjs";
+
 type Level = "info" | "warn" | "error";
 type Fields = Record<string, unknown>;
 
@@ -33,13 +36,19 @@ export const log = {
 
 /**
  * Captura un error para observabilidad. Devuelve un id corto para mostrar al
- * usuario y correlacionar en los logs. Cuando exista Sentry, enviar aquí.
+ * usuario y correlacionar entre los logs de Vercel y Sentry (tag `errorId`).
  */
 export function captureError(err: unknown, context: Fields = {}): string {
   const id = errorId();
   const e = err instanceof Error ? err : new Error(String(err));
-  log.error(e.message, { errorId: id, name: e.name, stack: e.stack?.split("\n").slice(0, 4).join(" | "), ...context });
-  // TODO(observabilidad): si process.env.SENTRY_DSN, Sentry.captureException(e, { extra: { errorId, ...context } })
+  const fields = safe(context);
+  log.error(e.message, { errorId: id, name: e.name, stack: e.stack?.split("\n").slice(0, 4).join(" | "), ...fields });
+  try {
+    // No-op mientras no exista SENTRY_DSN (el SDK no está inicializado).
+    Sentry.captureException(e, { tags: { errorId: id }, extra: fields });
+  } catch {
+    /* la observabilidad nunca debe tumbar la petición */
+  }
   return id;
 }
 

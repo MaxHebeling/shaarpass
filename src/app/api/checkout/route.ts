@@ -5,6 +5,7 @@ import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
 import { validatePromo } from "@/lib/ticketing/promo";
 import { isEdgeQueue, edgeAdmitted } from "@/lib/queue/edge";
+import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -42,9 +43,13 @@ export async function POST(req: Request) {
   const db = createAdminClient();
 
   // Rate limit por IP (anti-abuso): máx 30 intentos de checkout / minuto.
-  const ip = (req.headers.get("x-forwarded-for") ?? "local").split(",")[0].trim();
-  const { data: rlOk } = await db.rpc("hit_rate_limit", { p_key: `checkout:${ip}`, p_max: 30, p_window_seconds: 60 });
-  if (rlOk === false) return NextResponse.json({ error: "Demasiados intentos, espera un momento" }, { status: 429 });
+  const rl = await rateLimit({ key: `checkout:${clientIp(req)}`, max: 30, windowSeconds: 60, db });
+  if (!rl.ok) {
+    return NextResponse.json(
+      { error: "Demasiados intentos, espera un momento" },
+      { status: 429, headers: retryAfterHeaders(rl) },
+    );
+  }
 
   // Idempotencia: si ya existe una orden con esta key, devuélvela tal cual.
   const { data: existing } = await db
