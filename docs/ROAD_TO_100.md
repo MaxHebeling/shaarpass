@@ -1,7 +1,8 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-**12 de 13 ítems cerrados** (última actualización: 10-ago-2026).
-Cerrados: 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12. Queda solo **13** (definir SLO en UptimeRobot).
+**13 de 13 ítems cerrados** 🎉 (última actualización: 10-ago-2026). Blindaje de confiabilidad completo.
+Pendientes menores no bloqueantes: Stripe test real en staging (hoy placeholders); rotar `REPLICATE_API_TOKEN`
+si se pegó en chat; clic en *Test Notification* de UptimeRobot para validar la alerta en vivo.
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -122,7 +123,11 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
   — justo el mecanismo que protege `/dashboard`. Llevaba semanas ahí sin que nada avisara. Se resolvió subiendo a
   Next 16.3.0 + postcss (`npm audit` en 0). Al activarlo, Dependabot confirmó por su cuenta las mismas 14 alertas
   contra `main`. Es lo que hace que la próxima vez el aviso llegue solo, en lugar de por casualidad.
-- [ ] **13. SLO + presupuesto de errores** 🔑 — definir objetivo (ej. 99.9% en `/api/ready`) una vez haya monitoreo del ítem 3.
+- [x] **13. SLO + presupuesto de errores** 🔑 · *definido 10-ago-2026* — **SLO 99.9% mensual** sobre
+  `/api/ready` (SLI = BD + config OK), presupuesto ≈ 43 min/mes, medido con el monitor `ShaarPass — ready`
+  de UptimeRobot (uptime 30d). Definición completa + qué hacer al agotar presupuesto en `RELIABILITY.md §8.1`.
+  Monitor sano (100% a 24h/7d/30d). **Auto-check tuyo:** clic en *Test Notification* del monitor una vez
+  para confirmar que la alerta llega.
 
 ---
 

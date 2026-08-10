@@ -108,8 +108,18 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 
 - **Hoy:** Vercel Analytics + Speed Insights + health checks + smoke workflow (`.github/workflows/smoke.yml`, corre tras cada deploy y cada 30 min) + captura estructurada de errores (`lib/log.ts` + `instrumentation.ts`, con `errorId` correlacionable).
 - **Sentry:** SDK integrado en servidor y edge (`sentry.server.config.ts` / `sentry.edge.config.ts`), inerte sin `SENTRY_DSN`. Cada evento lleva el tag `errorId`, el mismo que sale en los logs de Vercel. Comprobar con `/api/debug/error` (§5). No cubre errores de navegador.
-- **Uptime:** UptimeRobot, 2 monitores cada 5 min sobre `/api/health` y `/api/ready`, alerta por email. **Nunca se ha provocado una caída para comprobar que la alerta llega** — hacerlo un día tranquilo pausando un deploy.
+- **Uptime:** UptimeRobot, 2 monitores cada 5 min sobre `/api/health` y `/api/ready`, alerta por email. Validar el canal con el botón **Test Notification** del monitor.
+- **Auto-rollback:** el job `rollback` de `smoke.yml` está **armado** (`VERCEL_TOKEN` en GitHub) — revierte prod si `/api/ready` queda en rojo tras un deploy.
 - **Incidentes:** procedimiento paso a paso en `docs/INCIDENT_RESPONSE.md`.
+
+### 8.1 SLO / presupuesto de error
+
+- **SLI:** disponibilidad de `GET /api/ready` (mide lo real: base de datos + configuración OK, no solo que el servidor prenda).
+- **SLO:** **99.9%** mensual.
+- **Presupuesto de error:** **≈ 43 min/mes** de caída tolerada.
+- **Medición:** el monitor `ShaarPass — ready` de UptimeRobot muestra el uptime a **30 días** — esa es la cifra contra la que se compara el SLO. (El plan free no expone SLA formal; la revisión es manual/mensual.)
+- **Si se agota el presupuesto** (uptime 30d < 99.9%): **congelar cambios riesgosos** (migraciones, checkout, webhooks) hasta recuperar presupuesto; priorizar estabilidad sobre features.
+- **Alerta:** caída → email inmediato de UptimeRobot; caída sostenida tras deploy → el auto-rollback actúa (§8, `smoke.yml`).
 
 ## 9. Secretos
 
