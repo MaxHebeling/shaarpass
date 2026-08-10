@@ -57,8 +57,10 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
   - **⚠️ Fuga conocida — el Storage NO entra en los backups.** Los backups son solo de la base de
     datos; los buckets (`venue-plans`, `org-logos`, imágenes de boletos) **no** se respaldan. La BD
     guarda las rutas, no los archivos. Si se borra un objeto de Storage, el restore de BD no lo
-    recupera. **Pendiente:** estrategia de backup aparte para el Storage (script `rclone`/similar a
-    otro destino). Rastreado como recomendación futura, no bloquea.
+    recupera. **Mitigado:** `npm run backup:storage` (`scripts/backup-storage.mjs`) descarga todos los
+    buckets a disco con manifiesto. Correrlo con la service role real como one-off y subir la copia a
+    tu destino de respaldo; ver `RELIABILITY.md §7`. Automatizar el envío a un destino externo queda
+    como mejora futura.
 
 - [ ] **5. Entorno de staging** 🔑+🧑‍💻 · *+5*
   - **Dónde:** Vercel → branch `staging` con su propia Preview + un proyecto Supabase aparte para pruebas.

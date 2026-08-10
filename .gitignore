@@ -13,3 +13,6 @@ logos Shaarpass*
 *-gigapixel-*
 
 favicon-13/
+
+# Backups locales del Storage (no versionar)
+storage-backup/
