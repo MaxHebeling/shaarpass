@@ -62,10 +62,12 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
     tu destino de respaldo; ver `RELIABILITY.md §7`. Automatizar el envío a un destino externo queda
     como mejora futura.
 
-- [~] **5. Entorno de staging** 🔑+🧑‍💻 — **runbook listo** en `docs/STAGING.md` (arquitectura, variables,
-  migraciones, webhook de prueba, flujo feature→staging→main). **Falta tuyo (2 pasos de consola):**
-  (1) crear el proyecto Supabase `shaarpass-staging`; (2) crear la rama `staging` + poner las variables
-  de staging en Vercel (scope Preview). Con eso queda operativo — todo el diseño y los pasos ya están escritos.
+- [~] **5. Entorno de staging** 🔑+🧑‍💻 — **BD de staging LISTA y verificada.** Proyecto Supabase
+  `shaarpass-staging` (ref `ijakjbpefnnausjqiimd`, us-east-1) creado y **cargado con el baseline**:
+  reproduce prod exacto (42 tablas / 56 funciones / 50 policies / 11 storage / 3 buckets / 5 cron).
+  Runbook completo en `docs/STAGING.md`. **Falta tuyo (1 paso, en la web):** crear la rama `staging`
+  en Vercel + poner las variables de staging (scope Preview) apuntando a este proyecto, con llaves
+  **de prueba** de Stripe. Guía exacta en `docs/STAGING.md §3`.
   - **Por qué:** validar cambios grandes (migraciones, checkout) sin tocar producción.
   - **Verificar:** push a `staging` → preview con su BD; `GET /api/ready` de staging en `database:ok`.
 
