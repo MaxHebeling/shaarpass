@@ -1,8 +1,8 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
 **13 de 13 ítems cerrados** 🎉 (última actualización: 10-ago-2026). Blindaje de confiabilidad completo,
-alerta validada en vivo y `REPLICATE_API_TOKEN` rotado. Pendientes menores no bloqueantes: Stripe test real
-en staging (hoy placeholders) e instalar la app de UptimeRobot para push en el móvil.
+alerta validada en vivo, `REPLICATE_API_TOKEN` rotado, app de UptimeRobot instalada (push) y **Stripe test
+real cargado en staging** (validado contra la API de Stripe, `livemode:false`). Sin pendientes.
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -69,8 +69,8 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
   Validado: `database:ok` (query de readiness contra la BD de staging) y `config:ok` (11 vars presentes).
   El `/api/ready` HTTP vive detrás de Vercel SSO (bueno para staging); se validaron sus dos chequeos
   directamente. Runbook: `docs/STAGING.md`.
-  - **Pendiente menor (no bloquea):** Stripe en Preview son **placeholders** `sk_test`/`pk_test` — hacen
-    pasar `config:ok`, pero para probar un cobro real en staging hay que poner llaves test reales.
+  - **Stripe test real** cargado en Preview (`sk_test`/`pk_test`, validados contra la API de Stripe,
+    `livemode:false`). Falta solo el webhook de prueba si quieres probar el flujo pago→confirmación.
   - **Verificar tú mismo:** abre `https://shaarpass-git-staging-max-ab784c70.vercel.app/api/ready` en el
     navegador (logueado en Vercel el SSO pasa solo) → `database:ok`, `config:ok`.
 
@@ -142,5 +142,6 @@ Las dos cosas que antes estaban "configuradas pero no probadas" ya se **validaro
 1. **La alerta SÍ llega** — probada con *Test Notification* de UptimeRobot (10-ago-2026), llegó al email.
 2. **El restore SÍ funciona** — ensayado restaurando el backup a un proyecto nuevo (ítem 4), datos exactos.
 
-**Pendientes menores no bloqueantes:** Stripe test real en staging (hoy placeholders); instalar la app de
-UptimeRobot para push en el móvil (el email es registro, no alarma que suene de madrugada).
+**Sin pendientes bloqueantes.** Único opcional: en staging, crear un webhook de prueba de Stripe apuntando
+a la URL de staging si quieres probar el flujo completo pago→confirmación (las llaves `sk_test`/`pk_test`
+ya están cargadas y validadas).
