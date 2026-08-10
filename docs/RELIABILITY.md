@@ -85,9 +85,11 @@ Vercel conserva todos los deploys. Para volver a una versión estable **inmediat
 
 ## 7. Backups y restauración (Disaster Recovery)
 
-- **Backups:** Supabase gestiona backups automáticos y **PITR** según el plan del proyecto (verificar en Dashboard → Database → Backups). **Acción pendiente:** confirmar plan + probar un restore.
-- **Restaurar:** Supabase Dashboard → Backups → restore a un punto en el tiempo, o restaurar a un proyecto nuevo y repuntar `NEXT_PUBLIC_SUPABASE_URL`.
-- **Datos borrados por error:** si hay PITR, restaurar a minutos antes del borrado. Si no, recuperar del último backup.
+- **Backups:** plan **Pro** → backups diarios físicos (uno por día, ~medianoche de la región). **Sin PITR** (add-on no activado): peor caso de pérdida ≈ hasta 24 h. Verificar en Dashboard → Database → Backups.
+- **Restore PROBADO (10-ago-2026):** vía **"Restore to new project (BETA)"** se restauró el backup diario a un proyecto nuevo y los conteos coincidieron exactos con producción, sin tocar prod. Es la vía recomendada para recuperar sin arriesgar los datos vivos.
+- **Restaurar:** Supabase Dashboard → Backups → "Restore to new project" (no destructivo, recomendado) y repuntar `NEXT_PUBLIC_SUPABASE_URL`; o "Restore" in-place (DESTRUCTIVO, sobrescribe el proyecto actual — solo para recuperación real, nunca de ensayo).
+- **Datos borrados por error:** restaurar del último backup diario (peor caso ~24 h de pérdida). Para recuperación al segundo haría falta activar PITR.
+- **⚠️ El Storage NO está en los backups.** Los backups son solo de la BD; los buckets (`venue-plans`, `org-logos`, imágenes de boletos) no se respaldan — la BD guarda rutas, no archivos. Un restore de BD no recupera objetos de Storage borrados. **Pendiente:** backup aparte del Storage.
 
 ### DR — respuestas rápidas
 - **App caída:** revisar Vercel status + `/api/health`; si el deploy está roto → **rollback** (§4).

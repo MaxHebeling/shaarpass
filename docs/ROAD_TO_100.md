@@ -1,8 +1,8 @@
 # ROAD TO 100/100 — Confiabilidad de ShaarPass
 
-**8 de 13 ítems cerrados** (última actualización: 10-ago-2026).
-Cerrados: 1, 2, 3, 7, 8, 9, 10, 12. Quedan: **4** (PITR), **5** (staging), **6** (rotar secretos),
-**11** (auto-rollback), **13** (SLO).
+**9 de 13 ítems cerrados** (última actualización: 10-ago-2026).
+Cerrados: 1, 2, 3, 4, 7, 8, 9, 10, 12. Quedan: **5** (staging), **6** (rotar secretos),
+**11** (auto-rollback, código listo, falta el token), **13** (SLO).
 
 A propósito no pongo un número sobre 100: los puntos de abajo eran una guía para priorizar, no una
 métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo configurado:
@@ -11,8 +11,11 @@ métrica. Lo que sí se puede afirmar hoy, porque está verificado y no solo con
 - Dos monitores externos vigilan `/api/health` y `/api/ready` cada 5 min y alertan por email.
 - `main` no acepta nada que no venga por PR con el check `verify` en verde.
 - 101 pruebas automáticas, incluido el flujo de pago completo y el boundary de auth.
+- **Un restore se probó de verdad:** el backup del 09-ago restaurado a un proyecto nuevo reprodujo
+  los datos exactos (9 events / 99 orders / 110 tickets / 3 orgs), sin tocar producción.
 
-El riesgo grande que sigue abierto es el **ítem 4**: nunca se ha ensayado un restore.
+El riesgo grande que quedaba (ensayar un restore) ya está cerrado. Lo que sigue abierto es robustez
+y una fuga conocida: **el Storage no entra en los backups** (ver ítem 4).
 
 Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude en el repo cuando digas.
 
@@ -43,10 +46,19 @@ Leyenda: 🔑 = solo tú (consola/credenciales) · 🧑‍💻 = lo hace Claude 
   - **Sin verificar todavía:** nunca se ha provocado una caída real para ver si la alerta llega.
     Pausa un deploy en Vercel algún día tranquilo y compruébalo.
 
-- [ ] **4. Verificar PITR + ENSAYAR un restore** 🔑 · *+6*
-  - **Dónde:** Supabase → proyecto `abkzfztzavrsglowwkkw` → Database → Backups. Confirma que PITR está activo (según plan). Restaura a un proyecto de prueba.
-  - **Por qué:** un backup que nunca se restauró no es un backup. Es el mayor riesgo real hoy.
-  - **Verificar:** el proyecto restaurado abre y tiene los datos hasta el punto elegido.
+- [x] **4. Verificar backups + ENSAYAR un restore** 🔑 · *hecho 10-ago-2026*
+  - **Backups:** plan **Pro** → backups diarios físicos (uno por día, ~medianoche de la región).
+    Sin add-on PITR: la pérdida máxima en el peor caso es de hasta ~24 h. Aceptable al volumen actual
+    (última orden del 01-jul); si el flujo de órdenes crece, activar **PITR** (pestaña "Point in time").
+  - **Restore probado:** con **"Restore to new project (BETA)"** se restauró el backup del 09-ago a un
+    proyecto nuevo (`shaarpass-restore-test`) sin tocar producción. La query de conteo dio **exacto**:
+    9 events / 99 orders / 110 tickets / 3 orgs, última orden 2026-07-01 17:18:30 UTC. Proyecto de
+    prueba pausado/borrado tras verificar.
+  - **⚠️ Fuga conocida — el Storage NO entra en los backups.** Los backups son solo de la base de
+    datos; los buckets (`venue-plans`, `org-logos`, imágenes de boletos) **no** se respaldan. La BD
+    guarda las rutas, no los archivos. Si se borra un objeto de Storage, el restore de BD no lo
+    recupera. **Pendiente:** estrategia de backup aparte para el Storage (script `rclone`/similar a
+    otro destino). Rastreado como recomendación futura, no bloquea.
 
 - [ ] **5. Entorno de staging** 🔑+🧑‍💻 · *+5*
   - **Dónde:** Vercel → branch `staging` con su propia Preview + un proyecto Supabase aparte para pruebas.
