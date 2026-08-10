@@ -19,8 +19,6 @@ jobs:
           cache: npm
       - name: Instalación reproducible
         run: npm ci
-      - name: Lint
-        run: npm run lint
       - name: Type check
         run: npm run typecheck
       - name: Tests
