@@ -2,6 +2,7 @@ name: Smoke (prod health)
 
 # Verifica que producción responde sano: tras cada deploy a main, cada 30 min, y a demanda.
 # No requiere credenciales: solo golpea endpoints públicos de salud.
+# Si un DEPLOY deja prod en rojo y existe VERCEL_TOKEN, revierte solo (job rollback).
 on:
   workflow_run:
     workflows: ["CI"]
@@ -29,3 +30,45 @@ jobs:
           cat /tmp/ready.json; echo
           if [ "$code" != "200" ]; then echo "::error::ready devolvió $code"; exit 1; fi
           grep -q '"database":"ok"' /tmp/ready.json || { echo "::error::database no ok"; exit 1; }
+
+  # Auto-rollback: SOLO cuando el smoke falla tras un deploy (no en los chequeos
+  # programados, donde una caída suele ser de infra y revertir no ayudaría).
+  # Reconfirma 3 veces antes de actuar y es inerte sin VERCEL_TOKEN.
+  rollback:
+    needs: smoke
+    if: ${{ always() && needs.smoke.result == 'failure' && github.event_name == 'workflow_run' }}
+    runs-on: ubuntu-latest
+    env:
+      VERCEL_TOKEN: ${{ secrets.VERCEL_TOKEN }}
+    steps:
+      - name: Confirmar que sigue caída (evita revertir por un blip transitorio)
+        id: confirm
+        run: |
+          ok=0
+          for i in 1 2 3; do
+            sleep 15
+            h=$(curl -fsS --max-time 20 https://www.shaarpass.io/api/health 2>/dev/null | grep -c '"ok":true' || true)
+            r=$(curl -s -o /dev/null -w "%{http_code}" --max-time 20 https://www.shaarpass.io/api/ready)
+            echo "intento $i: health_ok=$h ready=$r"
+            if [ "$h" = "1" ] && [ "$r" = "200" ]; then ok=1; break; fi
+          done
+          if [ "$ok" = "1" ]; then
+            echo "still_down=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "still_down=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Sin VERCEL_TOKEN → aviso (inerte, rollback manual)
+        if: ${{ steps.confirm.outputs.still_down == 'true' && env.VERCEL_TOKEN == '' }}
+        run: echo "::warning::Prod sigue en rojo tras el deploy pero no hay VERCEL_TOKEN. Rollback manual: docs/RELIABILITY.md §4."
+
+      - name: Revertir al deploy anterior (LAST KNOWN GOOD)
+        if: ${{ steps.confirm.outputs.still_down == 'true' && env.VERCEL_TOKEN != '' }}
+        run: |
+          echo "Prod sigue en rojo → revirtiendo a la versión previa…"
+          npx --yes vercel@latest rollback --yes --token "$VERCEL_TOKEN" --scope max-ab784c70
+          echo "::notice::Rollback ejecutado. Verifica GET /api/health (campo deployment)."
+
+      - name: Prod se recuperó sola → no revierto
+        if: ${{ steps.confirm.outputs.still_down == 'false' }}
+        run: echo "::notice::La caída fue transitoria; prod respondió sana en la reconfirmación. Sin rollback."
