@@ -12,8 +12,12 @@ export function ConnectButton({ label }: { label: string }) {
     setError(null);
     try {
       const res = await fetch("/api/connect/onboard", { method: "POST" });
-      const data = await res.json();
-      if (!res.ok || !data.url) throw new Error(data.error || "No se pudo iniciar la conexión. ¿Configuraste las claves de Stripe?");
+      // Nunca dejar que res.json() reviente si el cuerpo no es JSON (Safari lanza
+      // "The string did not match the expected pattern." con páginas de error).
+      const data = await res.json().catch(() => ({} as { url?: string; error?: string }));
+      if (!res.ok || !data.url) {
+        throw new Error(data.error || `No se pudo iniciar la conexión (HTTP ${res.status}). Reintenta en un momento.`);
+      }
       window.location.href = data.url;
     } catch (e) {
       setError((e as Error).message);
