@@ -9,6 +9,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createFakeDb, type FakeDb } from "@/test/fakeSupabase";
 import { sendTicketEmail } from "@/lib/email/tickets";
+import { sendBulkEmail } from "@/lib/email/campaigns";
 
 const h = vi.hoisted(() => ({
   db: null as unknown as FakeDb,
@@ -79,6 +80,9 @@ const paidEvent = (metadata: Record<string, string> = { order_id: ORDER_ID }) =>
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // Doble secreto: webhook de la cuenta + webhook de cuentas conectadas (cargos directos).
+  process.env.STRIPE_WEBHOOK_SECRET = "whsec_test_account";
+  process.env.STRIPE_CONNECT_WEBHOOK_SECRET = "whsec_test_connect";
   setup();
   withEvent(paidEvent());
 });
@@ -167,19 +171,25 @@ describe("webhook — reventa y abonos", () => {
 });
 
 describe("webhook — pago fallido y Connect", () => {
-  it("pago fallido marca la orden como failed (solo si seguía pending)", async () => {
+  it("pago fallido libera los holds de la orden (release_order_holds)", async () => {
     withEvent({
       type: "payment_intent.payment_failed",
       data: { object: { id: "pi_f", metadata: { order_id: ORDER_ID } } },
     });
     const res = await post("firma-buena");
     expect(res.status).toBe(200);
-    const upd = h.db.queries.find((q) => q.table === "orders" && q.op === "update");
-    expect(upd?.payload).toEqual({ status: "failed" });
-    expect(upd?.filters).toEqual([
-      { method: "eq", args: ["id", ORDER_ID] },
-      { method: "eq", args: ["status", "pending"] },
-    ]);
+    // El RPC (service role) libera GA + asientos y marca la orden 'failed'. Idempotente.
+    expect(h.db.rpcCalls).toContainEqual({ fn: "release_order_holds", args: { p_order_id: ORDER_ID } });
+  });
+
+  it("ficha OXXO vencida (payment_intent.canceled) libera los holds", async () => {
+    withEvent({
+      type: "payment_intent.canceled",
+      data: { object: { id: "pi_c", metadata: { order_id: ORDER_ID } } },
+    });
+    const res = await post("firma-buena");
+    expect(res.status).toBe(200);
+    expect(h.db.rpcCalls).toContainEqual({ fn: "release_order_holds", args: { p_order_id: ORDER_ID } });
   });
 
   it("reventa fallida libera el listing", async () => {
@@ -214,5 +224,63 @@ describe("webhook — pago fallido y Connect", () => {
     const res = await post("firma-buena");
     expect(res.status).toBe(200);
     await expect(res.json()).resolves.toEqual({ received: true });
+  });
+});
+
+describe("webhook — OXXO (pago asíncrono)", () => {
+  const OXXO_EXPIRES = 1_700_000_000; // unix
+
+  it("ficha emitida (processing) marca 'awaiting', extiende el hold y manda la ficha", async () => {
+    withEvent({
+      type: "payment_intent.processing",
+      data: {
+        object: {
+          id: "pi_oxxo",
+          metadata: { order_id: ORDER_ID },
+          next_action: {
+            type: "oxxo_display_details",
+            oxxo_display_details: { hosted_voucher_url: "https://voucher/oxxo", expires_after: OXXO_EXPIRES },
+          },
+        },
+      },
+    });
+    const res = await post("firma-buena");
+    expect(res.status).toBe(200);
+
+    const call = h.db.rpcCalls.find((c) => c.fn === "mark_order_awaiting_payment");
+    expect(call?.args).toMatchObject({
+      p_order_id: ORDER_ID,
+      p_method: "oxxo",
+      p_voucher_url: "https://voucher/oxxo",
+      p_expires_at: new Date(OXXO_EXPIRES * 1000).toISOString(),
+    });
+    // NO emite boletos todavía: el pago aún no entra.
+    expect(h.db.rpcCalls.some((c) => c.fn === "confirm_order_paid")).toBe(false);
+    expect(sendTicketEmail).not.toHaveBeenCalled();
+    // Sí envía la ficha de pago al comprador.
+    expect(sendBulkEmail).toHaveBeenCalled();
+  });
+
+  it("processing sin next_action reconocido no hace nada", async () => {
+    withEvent({
+      type: "payment_intent.processing",
+      data: { object: { id: "pi_x", metadata: { order_id: ORDER_ID }, next_action: null } },
+    });
+    const res = await post("firma-buena");
+    expect(res.status).toBe(200);
+    expect(h.db.rpcCalls.some((c) => c.fn === "mark_order_awaiting_payment")).toBe(false);
+  });
+});
+
+describe("webhook — doble secreto", () => {
+  it("verifica con el secreto de cuentas conectadas cuando el de la cuenta no coincide", async () => {
+    // El cargo directo llega firmado con el secreto del webhook de cuentas conectadas.
+    h.constructEvent = vi.fn(async (_body: string, _sig: string, secret: string) => {
+      if (secret !== "whsec_test_connect") throw new Error("No signatures found matching the expected signature");
+      return paidEvent();
+    });
+    const res = await post("firma-de-connect");
+    expect(res.status).toBe(200);
+    expect(h.db.rpcCalls.some((c) => c.fn === "confirm_order_paid")).toBe(true);
   });
 });

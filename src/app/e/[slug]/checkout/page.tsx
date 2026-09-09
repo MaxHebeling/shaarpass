@@ -27,6 +27,7 @@ export default function CheckoutPage() {
   const [country, setCountry] = useState("");
   const [phone, setPhone] = useState("");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [connectedAccountId, setConnectedAccountId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   // Promo
@@ -120,6 +121,8 @@ export default function CheckoutPage() {
       // Evento gratis: ya se emitieron los boletos, sin pago → directo a gracias.
       if (data.free) { sessionStorage.removeItem(`cart:${slug}`); router.push(`/e/${slug}/gracias`); return; }
       if (!data.clientSecret) throw new Error("Falta configurar Stripe (claves de pago).");
+      // Cargo directo: Stripe.js debe inicializarse sobre la cuenta del organizador.
+      setConnectedAccountId(data.connectedAccountId);
       setClientSecret(data.clientSecret);
     } catch (err) {
       setError((err as Error).message);
@@ -286,7 +289,7 @@ export default function CheckoutPage() {
           </p>
         </form>
       ) : (
-        <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#d6219b" } } }}>
+        <Elements stripe={getStripePromise(connectedAccountId)} options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#d6219b" } } }}>
           <PayForm slug={slug} total={money(totals.total, cart.currency)} />
         </Elements>
       )}

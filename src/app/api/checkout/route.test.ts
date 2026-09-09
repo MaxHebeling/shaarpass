@@ -185,29 +185,37 @@ describe("checkout — idempotencia", () => {
     expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
   });
 
-  it("pasa la idempotencyKey a Stripe (dedup del lado servidor)", async () => {
+  it("pasa la idempotencyKey y la cuenta Connect a Stripe (dedup + cargo directo)", async () => {
     await post(body());
-    expect(h.paymentIntentsCreate).toHaveBeenCalledWith(expect.anything(), { idempotencyKey: "idem_abcdefgh" });
+    expect(h.paymentIntentsCreate).toHaveBeenCalledWith(expect.anything(), {
+      idempotencyKey: "idem_abcdefgh",
+      stripeAccount: "acct_org_123",
+    });
   });
 });
 
 // ─── el dinero ───────────────────────────────────────────────────────────────
 
 describe("checkout — el cobro cuadra", () => {
-  it("crea el PaymentIntent con el total y la comisión de computeFees", async () => {
+  it("crea un CARGO DIRECTO con el total y la comisión de computeFees", async () => {
     const res = await post(body());
     expect(res.status).toBe(200);
+    // El cargo directo devuelve la cuenta Connect para inicializar Stripe.js allí.
+    await expect(res.json()).resolves.toMatchObject({ connectedAccountId: "acct_org_123" });
 
     const expected = computeFees(PRICE_CENTS * QTY, QTY, "mxn", 0);
-    const [params] = h.paymentIntentsCreate.mock.calls[0];
+    const [params, opts] = h.paymentIntentsCreate.mock.calls[0];
     expect(params).toMatchObject({
       amount: expected.totalCents,
       currency: "mxn",
       application_fee_amount: expected.platformFeeCents,
-      transfer_data: { destination: "acct_org_123" },
+      payment_method_types: ["card", "oxxo"], // MXN dentro del rango de OXXO
       receipt_email: "ana@test.mx",
       metadata: { order_id: ORDER_ID, event_id: EVENT_ID },
     });
+    // Cargo DIRECTO (no destination): sin transfer_data y con stripeAccount.
+    expect(params.transfer_data).toBeUndefined();
+    expect(opts).toMatchObject({ stripeAccount: "acct_org_123" });
   });
 
   it("invariante: amount = neto del organizador + application_fee", async () => {

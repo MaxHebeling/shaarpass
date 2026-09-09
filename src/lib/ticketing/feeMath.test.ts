@@ -1,11 +1,14 @@
 import { describe, it, expect } from "vitest";
 import {
   ourFeeCents,
+  marginCents,
   resaleBuyerTotal,
   processingRate,
   eventbriteMxFeeCents,
   eventbriteFeeCents,
   fmt,
+  OUR_PERCENT,
+  OUR_FIXED_CENTS,
 } from "./feeMath";
 
 describe("feeMath — la plataforma nunca pierde dinero", () => {
@@ -60,5 +63,42 @@ describe("comparación con Eventbrite", () => {
   it("fmt formatea en pesos por defecto", () => {
     expect(fmt(25_000)).toContain("250");
     expect(fmt(25_000, "usd")).not.toBe(fmt(25_000, "mxn"));
+  });
+});
+
+/**
+ * Invariante del gross-up bajo cargo DIRECTO + OXXO (MXN): tras la comisión de
+ * Stripe, lo que queda alcanza para el neto íntegro del organizador + el margen
+ * de la plataforma. Es lo que garantiza que el organizador reciba completo y la
+ * plataforma no pierda al mover el cobro a la cuenta Connect.
+ */
+function netAfterStripe(totalCents: number, currency: string): number {
+  const proc = processingRate(currency);
+  return totalCents - Math.round((totalCents * proc.pct) / 100) - proc.fixed;
+}
+
+describe("feeMath — gross-up cubre procesamiento + margen (cargo directo MXN/OXXO)", () => {
+  const cases = [
+    { subtotal: 100_000, tickets: 1 }, // $1,000 MXN, 1 boleto (caso del cliente Fuente de Vida)
+    { subtotal: 250_000, tickets: 5 },
+    { subtotal: 50_000, tickets: 2 },
+  ];
+  for (const c of cases) {
+    it(`sub=${c.subtotal} n=${c.tickets}`, () => {
+      const fee = ourFeeCents(c.subtotal, c.tickets, "mxn");
+      const total = c.subtotal + fee;
+      const net = netAfterStripe(total, "mxn");
+      const margin = marginCents(c.subtotal, c.tickets, OUR_PERCENT, OUR_FIXED_CENTS);
+      expect(net).toBeGreaterThanOrEqual(c.subtotal + margin - 1);
+      expect(fee).toBeGreaterThan(0);
+    });
+  }
+
+  it("incluye extras (passthrough) en el neto del organizador", () => {
+    const fee = ourFeeCents(100_000, 1, "mxn", 20_000); // +$200 en extras
+    const total = 100_000 + 20_000 + fee;
+    const net = netAfterStripe(total, "mxn");
+    const margin = marginCents(100_000, 1, OUR_PERCENT, OUR_FIXED_CENTS);
+    expect(net).toBeGreaterThanOrEqual(100_000 + 20_000 + margin - 1);
   });
 });
