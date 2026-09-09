@@ -23,6 +23,9 @@ export async function POST() {
         capabilities: {
           card_payments: { requested: true },
           transfers: { requested: true },
+          // OXXO (efectivo, MX) en cargos directos requiere esta capability en la
+          // cuenta del organizador. Stripe la pide en el onboarding si aplica.
+          oxxo_payments: { requested: true },
         },
         business_profile: { name: org.name },
       });

@@ -2,29 +2,125 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTicketEmail } from "@/lib/email/tickets";
+import { OXXO_EXPIRES_AFTER_DAYS } from "@/lib/stripe/paymentMethods";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
+
+/**
+ * Verifica la firma contra AMBOS secretos: el del webhook de la cuenta (eventos de
+ * plataforma, p.ej. account.updated) y el del webhook de cuentas conectadas (los
+ * cargos DIRECTOS del organizador llegan como eventos de cuenta conectada, con
+ * event.account definido). Un solo endpoint atiende ambos flujos.
+ */
+async function verify(body: string, sig: string): Promise<Stripe.Event | null> {
+  const secrets = [process.env.STRIPE_WEBHOOK_SECRET, process.env.STRIPE_CONNECT_WEBHOOK_SECRET].filter(Boolean) as string[];
+  for (const secret of secrets) {
+    try {
+      return await getStripe().webhooks.constructEventAsync(body, sig, secret);
+    } catch { /* prueba el siguiente secreto */ }
+  }
+  return null;
+}
+
+/** Método async a partir del next_action de un PaymentIntent en 'processing'. */
+function asyncMethodFrom(pi: Stripe.PaymentIntent): { method: string; voucherUrl: string | null; expiresAt: string } | null {
+  const na = pi.next_action;
+  if (na?.type === "oxxo_display_details") {
+    const d = na.oxxo_display_details;
+    return {
+      method: "oxxo",
+      voucherUrl: d?.hosted_voucher_url ?? null,
+      expiresAt: d?.expires_after
+        ? new Date(d.expires_after * 1000).toISOString()
+        : new Date(Date.now() + OXXO_EXPIRES_AFTER_DAYS * 86400_000).toISOString(),
+    };
+  }
+  // SPEI (customer_balance) reutilizará esta rama en su incremento.
+  return null;
+}
+
+async function fulfillOrder(db: ReturnType<typeof createAdminClient>, orderId: string, pi: Stripe.PaymentIntent): Promise<NextResponse | null> {
+  // confirm_order_paid es idempotente: webhook duplicado = no-op.
+  const { error } = await db.rpc("confirm_order_paid", { p_order_id: orderId, p_payment_intent_id: pi.id });
+  if (error) return NextResponse.json({ error: error.message }, { status: 500 }); // 500 → Stripe reintenta
+
+  const { data: order } = await db
+    .from("orders")
+    .select("buyer_email, buyer_name, buyer_country, event_id, total_cents, currency, events(title, slug, cover_image, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
+    .eq("id", orderId)
+    .single();
+  const { data: tks } = await db.from("tickets").select("qr_token, ticket_types(name)").eq("order_id", orderId);
+
+  if (order && tks?.length) {
+    const ev = order.events as unknown as { title: string; slug: string; cover_image: string | null; starts_at: string; timezone: string; safetix_enabled: boolean };
+    const org = order.organizations as unknown as { name: string; logo_url: string | null; white_label: boolean } | null;
+    await sendTicketEmail({
+      to: order.buyer_email,
+      eventTitle: ev?.title ?? "Tu evento",
+      eventDate: ev?.starts_at ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev.timezone }) : "",
+      coverImage: ev?.cover_image ?? null,
+      eventSlug: ev?.slug ?? null,
+      currency: order.currency,
+      totalCents: order.total_cents,
+      safetix: ev?.safetix_enabled,
+      logoUrl: org?.logo_url ?? null,
+      brand: org?.name ?? null,
+      whiteLabel: org?.white_label ?? false,
+      tickets: tks.map((t) => ({ qr_token: t.qr_token, typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto" })),
+    });
+    try {
+      const { sendWelcome } = await import("@/lib/email/campaignSend");
+      await sendWelcome(db, order.event_id, { email: order.buyer_email, name: order.buyer_name, country: order.buyer_country });
+    } catch { /* best-effort */ }
+  }
+  return null;
+}
 
 export async function POST(req: Request) {
   const sig = req.headers.get("stripe-signature");
   const body = await req.text(); // raw body para verificar firma
   if (!sig) return NextResponse.json({ error: "sin firma" }, { status: 400 });
 
-  let event: Stripe.Event;
-  try {
-    event = await getStripe().webhooks.constructEventAsync(
-      body,
-      sig,
-      process.env.STRIPE_WEBHOOK_SECRET!
-    );
-  } catch (err) {
-    return NextResponse.json({ error: `firma inválida: ${(err as Error).message}` }, { status: 400 });
-  }
+  const event = await verify(body, sig);
+  if (!event) return NextResponse.json({ error: "firma inválida" }, { status: 400 });
 
   const db = createAdminClient();
 
   switch (event.type) {
+    // Método async (OXXO/SPEI): la ficha/referencia se emitió, el pago AÚN NO entra.
+    // Extiende la reserva de inventario hasta el vencimiento de la ficha y avisa al
+    // comprador con su liga de pago. NO se emiten boletos todavía.
+    case "payment_intent.processing": {
+      const pi = event.data.object as Stripe.PaymentIntent;
+      const orderId = pi.metadata?.order_id;
+      const info = asyncMethodFrom(pi);
+      if (orderId && info) {
+        const { error } = await db.rpc("mark_order_awaiting_payment", {
+          p_order_id: orderId,
+          p_method: info.method,
+          p_voucher_url: info.voucherUrl,
+          p_expires_at: info.expiresAt,
+        });
+        if (error) return NextResponse.json({ error: error.message }, { status: 500 });
+        // Envía la ficha de pago al comprador (best-effort; también está en /gracias).
+        if (info.voucherUrl) {
+          try {
+            const { data: o } = await db.from("orders").select("buyer_email").eq("id", orderId).maybeSingle();
+            if (o?.buyer_email) {
+              const { sendBulkEmail } = await import("@/lib/email/campaigns");
+              await sendBulkEmail(
+                [o.buyer_email],
+                "Tu ficha de pago OXXO (ShaarPass)",
+                `Genera y paga tu ficha OXXO aquí: ${info.voucherUrl}\n\nEn cuanto recibamos el pago te enviamos tus boletos con QR. La ficha vence pronto: no la dejes pasar.`,
+              );
+            }
+          } catch { /* best-effort */ }
+        }
+      }
+      break;
+    }
+
     case "payment_intent.succeeded": {
       const pi = event.data.object as Stripe.PaymentIntent;
 
@@ -78,55 +174,8 @@ export async function POST(req: Request) {
 
       const orderId = pi.metadata?.order_id;
       if (orderId) {
-        // confirm_order_paid es idempotente: webhook duplicado = no-op.
-        const { error } = await db.rpc("confirm_order_paid", {
-          p_order_id: orderId,
-          p_payment_intent_id: pi.id,
-        });
-        if (error) {
-          // 500 → Stripe reintenta el webhook.
-          return NextResponse.json({ error: error.message }, { status: 500 });
-        }
-
-        // Envía los boletos con QR por email.
-        const { data: order } = await db
-          .from("orders")
-          .select("buyer_email, buyer_name, buyer_country, event_id, total_cents, currency, events(title, slug, cover_image, starts_at, timezone, safetix_enabled), organizations(name, logo_url, white_label)")
-          .eq("id", orderId)
-          .single();
-        const { data: tks } = await db
-          .from("tickets")
-          .select("qr_token, ticket_types(name)")
-          .eq("order_id", orderId);
-
-        if (order && tks?.length) {
-          const ev = order.events as unknown as { title: string; slug: string; cover_image: string | null; starts_at: string; timezone: string; safetix_enabled: boolean };
-          const org = order.organizations as unknown as { name: string; logo_url: string | null; white_label: boolean } | null;
-          await sendTicketEmail({
-            to: order.buyer_email,
-            eventTitle: ev?.title ?? "Tu evento",
-            eventDate: ev?.starts_at
-              ? new Date(ev.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric", timeZone: ev.timezone })
-              : "",
-            coverImage: ev?.cover_image ?? null,
-            eventSlug: ev?.slug ?? null,
-            currency: order.currency,
-            totalCents: order.total_cents,
-            safetix: ev?.safetix_enabled,
-            logoUrl: org?.logo_url ?? null,
-            brand: org?.name ?? null,
-            whiteLabel: org?.white_label ?? false,
-            tickets: tks.map((t) => ({
-              qr_token: t.qr_token,
-              typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto",
-            })),
-          });
-          // Automatización de bienvenida (si está activa).
-          try {
-            const { sendWelcome } = await import("@/lib/email/campaignSend");
-            await sendWelcome(db, order.event_id, { email: order.buyer_email, name: order.buyer_name, country: order.buyer_country });
-          } catch { /* best-effort */ }
-        }
+        const res = await fulfillOrder(db, orderId, pi);
+        if (res) return res;
       }
       break;
     }
@@ -144,7 +193,10 @@ export async function POST(req: Request) {
         .eq("stripe_account_id", account.id);
       break;
     }
-    case "payment_intent.payment_failed": {
+
+    // Falló el pago o venció la ficha OXXO/SPEI → libera la reserva de inventario.
+    case "payment_intent.payment_failed":
+    case "payment_intent.canceled": {
       const pi = event.data.object as Stripe.PaymentIntent;
       // Reventa: libera el listing reservado para que otro pueda comprarlo.
       if (pi.metadata?.kind === "resale" && pi.metadata?.listing_id) {
@@ -153,15 +205,19 @@ export async function POST(req: Request) {
       }
       const orderId = pi.metadata?.order_id;
       if (orderId) {
-        await db.from("orders").update({ status: "failed" }).eq("id", orderId).eq("status", "pending");
         // Abono: el cupo se reservó al crear la orden → liberarlo.
         if (pi.metadata?.kind === "season" && pi.metadata?.season_id) {
+          await db.from("orders").update({ status: "failed" }).eq("id", orderId).in("status", ["pending", "awaiting_payment"]);
           await db.rpc("release_season_pass", { p_season: pi.metadata.season_id });
+        } else {
+          // Eventos: libera holds (GA y asientos) extendidos y marca la orden.
+          // Idempotente y sin efecto si la orden ya fue pagada.
+          await db.rpc("release_order_holds", { p_order_id: orderId });
         }
-        // Eventos: los holds expiran solos vía pg_cron; no tocamos quantity_sold.
       }
       break;
     }
+
     default:
       break;
   }

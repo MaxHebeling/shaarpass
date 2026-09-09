@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
+import type Stripe from "stripe";
 import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
+import { paymentMethodsFor, paymentMethodOptions } from "@/lib/stripe/paymentMethods";
 import { validatePromo } from "@/lib/ticketing/promo";
 import { isEdgeQueue, edgeAdmitted } from "@/lib/queue/edge";
 import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
@@ -269,18 +271,27 @@ export async function POST(req: Request) {
     return NextResponse.json({ free: true, orderId: order.id });
   }
 
-  // 4) PaymentIntent con destination charge: el neto va al organizador,
-  //    application_fee_amount = nuestra comisión transparente.
+  // 4) PaymentIntent con CARGO DIRECTO sobre la cuenta Connect del organizador:
+  //    el cargo (y el dinero) vive en SU cuenta, no en la plataforma —
+  //    application_fee_amount = nuestra comisión. Así el dinero del organizador
+  //    nunca pasa por el RFC de la plataforma (requisito fiscal en México).
+  //    Para MXN habilitamos OXXO (efectivo, asíncrono): el pago NO entra al
+  //    confirmar; se emite una ficha y se cobra vía webhook cuando el comprador
+  //    paga en la tienda. La reserva de inventario se extiende en ese momento.
+  const connectedAccountId = org.stripe_account_id!;
+  const methods = paymentMethodsFor(event.currency, orderTotal);
+  const intentParams: Stripe.PaymentIntentCreateParams = {
+    amount: orderTotal,
+    currency: event.currency,
+    application_fee_amount: fees.platformFeeCents,
+    payment_method_types: methods as Stripe.PaymentIntentCreateParams["payment_method_types"],
+    payment_method_options: paymentMethodOptions(methods) as Stripe.PaymentIntentCreateParams["payment_method_options"],
+    receipt_email: buyerEmail,
+    metadata: { order_id: order.id, event_id: eventId },
+  };
   const intent = await getStripe().paymentIntents.create(
-    {
-      amount: orderTotal,
-      currency: event.currency,
-      application_fee_amount: fees.platformFeeCents,
-      transfer_data: { destination: org.stripe_account_id! },
-      receipt_email: buyerEmail,
-      metadata: { order_id: order.id, event_id: eventId },
-    },
-    { idempotencyKey } // Stripe dedup del lado servidor
+    intentParams,
+    { idempotencyKey, stripeAccount: connectedAccountId } // dedup + cargo directo
   );
 
   await db.from("orders").update({ stripe_payment_intent_id: intent.id }).eq("id", order.id);
@@ -288,6 +299,7 @@ export async function POST(req: Request) {
   return NextResponse.json({
     orderId: order.id,
     clientSecret: intent.client_secret,
+    connectedAccountId, // el cliente inicializa Stripe.js sobre esta cuenta
     fees,
   });
 }
