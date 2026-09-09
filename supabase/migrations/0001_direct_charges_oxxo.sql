@@ -86,8 +86,10 @@ begin
 end $$;
 
 -- 5) Estas RPC solo deben invocarse desde el servidor (service role), nunca anon.
-revoke all on function public.mark_order_awaiting_payment(uuid, text, text, timestamptz) from public;
-revoke all on function public.release_order_holds(uuid) from public;
+--    Supabase concede EXECUTE por defecto a anon/authenticated en funciones de
+--    public (además del grant a PUBLIC), así que hay que revocarles a los tres.
+revoke all on function public.mark_order_awaiting_payment(uuid, text, text, timestamptz) from public, anon, authenticated;
+revoke all on function public.release_order_holds(uuid) from public, anon, authenticated;
 grant execute on function public.mark_order_awaiting_payment(uuid, text, text, timestamptz) to service_role;
 grant execute on function public.release_order_holds(uuid) to service_role;
 
