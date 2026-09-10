@@ -4,7 +4,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
-import { paymentMethodsFor, paymentMethodOptions } from "@/lib/stripe/paymentMethods";
+import { paymentMethodsFor, paymentMethodOptions, requiresCustomer } from "@/lib/stripe/paymentMethods";
 import { validatePromo } from "@/lib/ticketing/promo";
 import { isEdgeQueue, edgeAdmitted } from "@/lib/queue/edge";
 import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees)")
+    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees, oxxo_enabled, spei_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     const { data: ok } = await db.rpc("validate_presale_code", { p_event: eventId, p_code: presaleCode ?? "" });
     if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
-  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean; absorb_fees: boolean };
+  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean; absorb_fees: boolean; oxxo_enabled: boolean; spei_enabled: boolean };
 
   // Precios autoritativos desde la BD (nunca confíes en el cliente).
   const ids = items.map((i) => i.ticketTypeId);
@@ -284,7 +284,9 @@ export async function POST(req: Request) {
   //    confirmar; se emite una ficha y se cobra vía webhook cuando el comprador
   //    paga en la tienda. La reserva de inventario se extiende en ese momento.
   const connectedAccountId = org.stripe_account_id!;
-  const methods = paymentMethodsFor(event.currency, orderTotal);
+  // Solo ofrecemos un método si la cuenta conectada tiene su capability ACTIVA;
+  // si no, Stripe rechazaría todo el PaymentIntent y rompería el checkout.
+  const methods = paymentMethodsFor(event.currency, orderTotal, { oxxo: !!org.oxxo_enabled, spei: !!org.spei_enabled });
   const intentParams: Stripe.PaymentIntentCreateParams = {
     amount: orderTotal,
     currency: event.currency,
@@ -294,6 +296,14 @@ export async function POST(req: Request) {
     receipt_email: buyerEmail,
     metadata: { order_id: order.id, event_id: eventId },
   };
+  // SPEI (customer_balance) exige un Customer en el PI; se crea en la cuenta conectada.
+  if (requiresCustomer(methods)) {
+    const customer = await getStripe().customers.create(
+      { email: buyerEmail, name: buyerName },
+      { stripeAccount: connectedAccountId, idempotencyKey: `cust_${idempotencyKey}` },
+    );
+    intentParams.customer = customer.id;
+  }
   const intent = await getStripe().paymentIntents.create(
     intentParams,
     { idempotencyKey, stripeAccount: connectedAccountId } // dedup + cargo directo

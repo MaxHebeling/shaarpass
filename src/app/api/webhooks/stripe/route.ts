@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTicketEmail } from "@/lib/email/tickets";
-import { OXXO_EXPIRES_AFTER_DAYS } from "@/lib/stripe/paymentMethods";
+import { OXXO_EXPIRES_AFTER_DAYS, SPEI_EXPIRES_AFTER_DAYS } from "@/lib/stripe/paymentMethods";
 import type Stripe from "stripe";
 
 export const runtime = "nodejs";
@@ -36,7 +36,16 @@ function asyncMethodFrom(pi: Stripe.PaymentIntent): { method: string; voucherUrl
         : new Date(Date.now() + OXXO_EXPIRES_AFTER_DAYS * 86400_000).toISOString(),
     };
   }
-  // SPEI (customer_balance) reutilizará esta rama en su incremento.
+  if (na?.type === "display_bank_transfer_instructions") {
+    // SPEI (customer_balance / mx_bank_transfer): la referencia no trae expiración
+    // fija, usamos un default para la reserva de inventario.
+    const d = na.display_bank_transfer_instructions;
+    return {
+      method: "spei",
+      voucherUrl: d?.hosted_instructions_url ?? null,
+      expiresAt: new Date(Date.now() + SPEI_EXPIRES_AFTER_DAYS * 86400_000).toISOString(),
+    };
+  }
   return null;
 }
 
@@ -110,16 +119,19 @@ export async function POST(req: Request) {
           p_expires_at: info.expiresAt,
         });
         if (error) return NextResponse.json({ error: error.message }, { status: 500 });
-        // Envía la ficha de pago al comprador (best-effort; también está en /gracias).
+        // Envía la ficha/referencia de pago al comprador (best-effort; también en /gracias).
         if (info.voucherUrl) {
           try {
             const { data: o } = await db.from("orders").select("buyer_email").eq("id", orderId).maybeSingle();
             if (o?.buyer_email) {
               const { sendBulkEmail } = await import("@/lib/email/campaigns");
+              const isSpei = info.method === "spei";
               await sendBulkEmail(
                 [o.buyer_email],
-                "Tu ficha de pago OXXO (ShaarPass)",
-                `Genera y paga tu ficha OXXO aquí: ${info.voucherUrl}\n\nEn cuanto recibamos el pago te enviamos tus boletos con QR. La ficha vence pronto: no la dejes pasar.`,
+                isSpei ? "Tu referencia de pago SPEI (ShaarPass)" : "Tu ficha de pago OXXO (ShaarPass)",
+                isSpei
+                  ? `Haz tu transferencia SPEI con los datos aquí: ${info.voucherUrl}\n\nEn cuanto recibamos el pago te enviamos tus boletos con QR.`
+                  : `Genera y paga tu ficha OXXO aquí: ${info.voucherUrl}\n\nEn cuanto recibamos el pago te enviamos tus boletos con QR. La ficha vence pronto: no la dejes pasar.`,
               );
             }
           } catch { /* best-effort */ }
@@ -197,9 +209,16 @@ export async function POST(req: Request) {
         account.charges_enabled && account.payouts_enabled && account.details_submitted
         && !account.requirements?.disabled_reason
       );
+      // Métodos de pago disponibles según capabilities ACTIVAS de la cuenta conectada.
+      const caps = account.capabilities ?? {};
       await db
         .from("organizations")
-        .update({ charges_enabled: canSell, payouts_enabled: fullyEnabled })
+        .update({
+          charges_enabled: canSell,
+          payouts_enabled: fullyEnabled,
+          oxxo_enabled: caps.oxxo_payments === "active",
+          spei_enabled: caps.mx_bank_transfer_payments === "active",
+        })
         .eq("stripe_account_id", account.id);
       break;
     }

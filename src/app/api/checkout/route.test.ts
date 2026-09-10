@@ -14,11 +14,12 @@ import { computeFees } from "@/lib/ticketing/fees";
 const h = vi.hoisted(() => ({
   db: null as unknown as FakeDb,
   paymentIntentsCreate: null as unknown as ReturnType<typeof vi.fn>,
+  customersCreate: null as unknown as ReturnType<typeof vi.fn>,
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => h.db }));
 vi.mock("@/lib/stripe/client", () => ({
-  getStripe: () => ({ paymentIntents: { create: h.paymentIntentsCreate } }),
+  getStripe: () => ({ paymentIntents: { create: h.paymentIntentsCreate }, customers: { create: h.customersCreate } }),
 }));
 vi.mock("@/lib/email/tickets", () => ({ sendTicketEmail: vi.fn(async () => undefined) }));
 vi.mock("@/lib/email/campaignSend", () => ({ sendWelcome: vi.fn(async () => undefined) }));
@@ -60,7 +61,7 @@ function setup(o: Overrides = {}) {
     max_tickets_per_buyer: null,
     presale_enabled: false,
     presale_ends_at: null,
-    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false },
+    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false, oxxo_enabled: true, spei_enabled: false },
     ...o.event,
   };
   const price = o.priceCents ?? PRICE_CENTS;
@@ -97,6 +98,7 @@ function setup(o: Overrides = {}) {
   });
 
   h.paymentIntentsCreate = vi.fn(async () => ({ id: "pi_test_123", client_secret: "pi_test_123_secret" }));
+  h.customersCreate = vi.fn(async () => ({ id: "cus_test_123" }));
 }
 
 function body(extra: Record<string, unknown> = {}) {
@@ -251,6 +253,24 @@ describe("checkout — el cobro cuadra", () => {
     expect(params.amount).toBe(PRICE_CENTS * QTY);                    // precio de lista exacto, sin fee
     expect(params.amount).toBe(expected.totalCents);
     expect(params.application_fee_amount).toBe(expected.marginCents); // plataforma sigue cobrando margen
+  });
+
+  it("SPEI habilitado: ofrece customer_balance y crea un Customer en la cuenta conectada", async () => {
+    setup({ event: { organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false, oxxo_enabled: true, spei_enabled: true } } });
+    await post(body());
+    const [params] = h.paymentIntentsCreate.mock.calls[0];
+    expect(params.payment_method_types).toEqual(["card", "oxxo", "customer_balance"]);
+    expect(h.customersCreate).toHaveBeenCalledTimes(1);
+    expect(h.customersCreate.mock.calls[0][1]).toMatchObject({ stripeAccount: "acct_org_123" });
+    expect(params.customer).toBe("cus_test_123");
+  });
+
+  it("sin capabilities activas: NO ofrece OXXO ni SPEI (evita romper el PI)", async () => {
+    setup({ event: { organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false, oxxo_enabled: false, spei_enabled: false } } });
+    await post(body());
+    const [params] = h.paymentIntentsCreate.mock.calls[0];
+    expect(params.payment_method_types).toEqual(["card"]);
+    expect(h.customersCreate).not.toHaveBeenCalled();
   });
 
   it("el precio sale de la BD, no del cliente", async () => {
