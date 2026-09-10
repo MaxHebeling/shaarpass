@@ -21,7 +21,13 @@ export async function GET() {
       account.charges_enabled && account.payouts_enabled && account.details_submitted
       && !account.requirements?.disabled_reason
     );
-    await db.from("organizations").update({ charges_enabled: canSell, payouts_enabled: fullyEnabled }).eq("id", org.id);
+    const caps = account.capabilities ?? {};
+    await db.from("organizations").update({
+      charges_enabled: canSell,
+      payouts_enabled: fullyEnabled,
+      oxxo_enabled: caps.oxxo_payments === "active",
+      spei_enabled: caps.mx_bank_transfer_payments === "active",
+    }).eq("id", org.id);
   }
 
   return NextResponse.redirect(new URL("/dashboard/pagos?synced=1", base));

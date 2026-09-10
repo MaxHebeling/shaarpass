@@ -26,6 +26,8 @@ export async function POST() {
           // OXXO (efectivo, MX) en cargos directos requiere esta capability en la
           // cuenta del organizador. Stripe la pide en el onboarding si aplica.
           oxxo_payments: { requested: true },
+          // SPEI (transferencia bancaria MX) vía customer_balance.
+          mx_bank_transfer_payments: { requested: true },
         },
         business_profile: { name: org.name },
       });

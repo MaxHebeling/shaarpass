@@ -201,23 +201,26 @@ describe("webhook — pago fallido y Connect", () => {
     expect(h.db.rpcCalls).toContainEqual({ fn: "release_listing", args: { p_listing: "l_9" } });
   });
 
-  it("account.updated: cuenta completa → puede vender y payouts habilitados", async () => {
+  it("account.updated: cuenta completa → puede vender, payouts y capabilities sincronizadas", async () => {
     withEvent({
       type: "account.updated",
-      data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: true, details_submitted: true, requirements: {} } },
+      data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: true, details_submitted: true, requirements: {}, capabilities: { oxxo_payments: "active", mx_bank_transfer_payments: "active" } } },
     });
     await post("firma-buena");
-    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({ charges_enabled: true, payouts_enabled: true });
+    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({
+      charges_enabled: true, payouts_enabled: true, oxxo_enabled: true, spei_enabled: true,
+    });
   });
 
-  it("account.updated: charges ok pero verificación de payout pendiente → vende, payouts NO", async () => {
+  it("account.updated: charges ok, payout pendiente y SPEI inactivo → flags correctos", async () => {
     withEvent({
       type: "account.updated",
-      data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: false, details_submitted: true, requirements: { disabled_reason: "requirements.pending_verification" } } },
+      data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: false, details_submitted: true, requirements: { disabled_reason: "requirements.pending_verification" }, capabilities: { oxxo_payments: "active" } } },
     });
     await post("firma-buena");
-    // charges_enabled=true (ya vende), payouts_enabled=false (Stripe aún verifica).
-    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({ charges_enabled: true, payouts_enabled: false });
+    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({
+      charges_enabled: true, payouts_enabled: false, oxxo_enabled: true, spei_enabled: false,
+    });
   });
 
   it("un tipo de evento desconocido se acusa con 200 (no reintentar)", async () => {
@@ -291,6 +294,27 @@ describe("webhook — OXXO (pago asíncrono)", () => {
     expect(res.status).toBe(200);
     const call = h.db.rpcCalls.find((c) => c.fn === "mark_order_awaiting_payment");
     expect(call?.args).toMatchObject({ p_order_id: ORDER_ID, p_method: "oxxo", p_voucher_url: "https://voucher/oxxo2" });
+    expect(sendBulkEmail).toHaveBeenCalled();
+  });
+
+  it("SPEI (display_bank_transfer_instructions) marca 'awaiting' con method=spei", async () => {
+    withEvent({
+      type: "payment_intent.requires_action",
+      data: {
+        object: {
+          id: "pi_spei",
+          metadata: { order_id: ORDER_ID },
+          next_action: {
+            type: "display_bank_transfer_instructions",
+            display_bank_transfer_instructions: { hosted_instructions_url: "https://pay/spei", reference: "349864", type: "mx_bank_transfer" },
+          },
+        },
+      },
+    });
+    const res = await post("firma-buena");
+    expect(res.status).toBe(200);
+    const call = h.db.rpcCalls.find((c) => c.fn === "mark_order_awaiting_payment");
+    expect(call?.args).toMatchObject({ p_order_id: ORDER_ID, p_method: "spei", p_voucher_url: "https://pay/spei" });
     expect(sendBulkEmail).toHaveBeenCalled();
   });
 
