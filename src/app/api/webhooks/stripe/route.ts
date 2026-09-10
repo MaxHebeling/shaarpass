@@ -183,13 +183,16 @@ export async function POST(req: Request) {
     // Connect: la cuenta del organizador cambió de estado.
     case "account.updated": {
       const account = event.data.object as Stripe.Account;
-      const enabled = Boolean(
+      // charges_enabled = puede VENDER (cargo directo cae en su cuenta).
+      // payouts_enabled (col) = totalmente habilitado / ya recibe depósitos al banco.
+      const canSell = Boolean(account.charges_enabled);
+      const fullyEnabled = Boolean(
         account.charges_enabled && account.payouts_enabled && account.details_submitted
         && !account.requirements?.disabled_reason
       );
       await db
         .from("organizations")
-        .update({ payouts_enabled: enabled })
+        .update({ charges_enabled: canSell, payouts_enabled: fullyEnabled })
         .eq("stripe_account_id", account.id);
       break;
     }

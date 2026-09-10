@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, payouts_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, charges_enabled, payouts_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     const { data: ok } = await db.rpc("validate_presale_code", { p_event: eventId, p_code: presaleCode ?? "" });
     if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
-  const org = event.organizations as unknown as { stripe_account_id: string | null; payouts_enabled: boolean };
+  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean };
 
   // Precios autoritativos desde la BD (nunca confíes en el cliente).
   const ids = items.map((i) => i.ticketTypeId);
@@ -180,7 +180,10 @@ export async function POST(req: Request) {
   const isFree = orderTotal <= 0;
 
   // Los pagos solo se exigen si HAY que cobrar. Los eventos gratis no necesitan Stripe.
-  if (!isFree && (!org?.stripe_account_id || !org.payouts_enabled)) {
+  // Cargo DIRECTO: basta con charges_enabled (el dinero cae en la cuenta del
+  // organizador); payouts_enabled solo define cuándo Stripe le deposita al banco,
+  // así que no debe bloquear la venta mientras Stripe verifica la cuenta.
+  if (!isFree && (!org?.stripe_account_id || !org.charges_enabled)) {
     return NextResponse.json({ error: "organizador sin pagos habilitados" }, { status: 409 });
   }
 

@@ -60,7 +60,7 @@ function setup(o: Overrides = {}) {
     max_tickets_per_buyer: null,
     presale_enabled: false,
     presale_ends_at: null,
-    organizations: { stripe_account_id: "acct_org_123", payouts_enabled: true },
+    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true },
     ...o.event,
   };
   const price = o.priceCents ?? PRICE_CENTS;
@@ -153,11 +153,27 @@ describe("checkout — validación y defensa", () => {
     expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
   });
 
-  it("organizador sin pagos habilitados → 409", async () => {
-    setup({ event: { organizations: { stripe_account_id: null, payouts_enabled: false } } });
+  it("organizador sin cuenta conectada → 409", async () => {
+    setup({ event: { organizations: { stripe_account_id: null, charges_enabled: false, payouts_enabled: false } } });
     const res = await post(body());
     expect(res.status).toBe(409);
     expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it("organizador conectado pero charges_enabled=false → 409", async () => {
+    setup({ event: { organizations: { stripe_account_id: "acct_org_123", charges_enabled: false, payouts_enabled: false } } });
+    const res = await post(body());
+    expect(res.status).toBe(409);
+    expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it("cargo directo: vende con charges_enabled aunque payouts_enabled sea false", async () => {
+    // Clave del modelo direct charge: el dinero cae en la cuenta del organizador en
+    // cuanto puede cobrar; los payouts en verificación NO deben bloquear la venta.
+    setup({ event: { organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: false } } });
+    const res = await post(body());
+    expect(res.status).toBe(200);
+    expect(h.paymentIntentsCreate).toHaveBeenCalled();
   });
 
   it("supera el límite de boletos por comprador → 409", async () => {

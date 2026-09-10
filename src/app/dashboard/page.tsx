@@ -69,13 +69,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const hasEvent = events.length > 0;
   const hasPublished = events.some((e) => e.status === "published");
   const hasCover = events.some((e) => !!e.cover_image);
-  let hasTickets = false, payoutsEnabled = false;
+  let hasTickets = false, payoutsEnabled = false, canSell = false;
   if (ids.length) {
     const { count: ttCount } = await db.from("ticket_types").select("id", { count: "exact", head: true }).in("event_id", ids);
     hasTickets = (ttCount ?? 0) > 0;
   }
   if (orgIds.length) {
-    const { data: org } = await db.from("organizations").select("stripe_account_id, payouts_enabled").eq("id", orgIds[0]).maybeSingle();
+    const { data: org } = await db.from("organizations").select("stripe_account_id, charges_enabled, payouts_enabled").eq("id", orgIds[0]).maybeSingle();
+    // canSell = ya puede cobrar (cargo directo). payoutsEnabled = totalmente habilitado.
+    canSell = !!(org?.stripe_account_id && org?.charges_enabled);
     payoutsEnabled = !!(org?.stripe_account_id && org?.payouts_enabled);
   }
 
@@ -91,7 +93,10 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       .gt("price_cents", 0);
     hasPaidPublished = (count ?? 0) > 0;
   }
-  const needsPayments = hasPaidPublished && !payoutsEnabled;
+  // El checkout ahora se habilita con charges_enabled (cargo directo). El banner de
+  // alerta solo debe salir si NI SIQUIERA puede cobrar; si ya vende pero los payouts
+  // están en verificación, no es una alerta de "no puedes cobrar".
+  const needsPayments = hasPaidPublished && !canSell;
 
   const onboarded = hasPublished && hasTickets;
   const manageHref = events[0] ? `/dashboard/eventos/${events[0].id}` : null;
