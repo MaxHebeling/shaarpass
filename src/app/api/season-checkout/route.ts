@@ -23,23 +23,26 @@ export async function POST(req: Request) {
   if (!rl.ok) return NextResponse.json({ error: "Demasiadas solicitudes" }, { status: 429, headers: retryAfterHeaders(rl) });
 
   // Reusa una orden previa con la misma idempotency (reintentos del cliente).
+  // El PI es un CARGO DIRECTO en la cuenta del organizador → retrieve con stripeAccount.
   const { data: prior } = await db
-    .from("orders").select("id, stripe_payment_intent_id").eq("idempotency_key", idempotencyKey).maybeSingle();
+    .from("orders").select("id, stripe_payment_intent_id, organizations(stripe_account_id)").eq("idempotency_key", idempotencyKey).maybeSingle();
   if (prior?.stripe_payment_intent_id) {
-    const pi = await getStripe().paymentIntents.retrieve(prior.stripe_payment_intent_id);
-    return NextResponse.json({ orderId: prior.id, clientSecret: pi.client_secret });
+    const acct = (prior.organizations as unknown as { stripe_account_id: string | null } | null)?.stripe_account_id ?? undefined;
+    const pi = await getStripe().paymentIntents.retrieve(prior.stripe_payment_intent_id, acct ? { stripeAccount: acct } : undefined);
+    return NextResponse.json({ orderId: prior.id, clientSecret: pi.client_secret, connectedAccountId: acct });
   }
 
   const { data: season } = await db
     .from("seasons")
-    .select("id, org_id, currency, price_cents, status, organizations(stripe_account_id, payouts_enabled)")
+    .select("id, org_id, currency, price_cents, status, organizations(stripe_account_id, charges_enabled, absorb_fees)")
     .eq("id", seasonId)
     .maybeSingle();
   if (!season || season.status !== "published") {
     return NextResponse.json({ error: "Abono no disponible" }, { status: 404 });
   }
-  const org = season.organizations as unknown as { stripe_account_id: string | null; payouts_enabled: boolean };
-  if (!org?.stripe_account_id || !org.payouts_enabled) {
+  const org = season.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; absorb_fees: boolean };
+  // Cargo directo: basta charges_enabled (el dinero cae en la cuenta del organizador).
+  if (!org?.stripe_account_id || !org.charges_enabled) {
     return NextResponse.json({ error: "El organizador aún no puede recibir pagos" }, { status: 409 });
   }
 
@@ -48,7 +51,7 @@ export async function POST(req: Request) {
   if (resErr) return NextResponse.json({ error: resErr.message }, { status: 500 });
   if (!reserved) return NextResponse.json({ error: "Abono agotado o sin cupo en algún evento" }, { status: 409 });
 
-  const fees = computeFees(season.price_cents, 1, season.currency);
+  const fees = computeFees(season.price_cents, 1, season.currency, 0, org.absorb_fees);
   const manageToken = crypto.randomUUID().replace(/-/g, "");
 
   const { data: order, error: orderErr } = await db
@@ -59,7 +62,7 @@ export async function POST(req: Request) {
       buyer_email: buyerEmail,
       status: "pending",
       subtotal_cents: fees.subtotalCents,
-      platform_fee_cents: fees.platformFeeCents,
+      platform_fee_cents: fees.applicationFeeCents,
       total_cents: fees.totalCents,
       currency: season.currency,
       idempotency_key: idempotencyKey,
@@ -72,19 +75,23 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "No se pudo crear la orden" }, { status: 500 });
   }
 
-  // Destination charge: el neto va al organizador, application_fee = comisión.
+  // CARGO DIRECTO sobre la cuenta Connect del organizador: el cargo vive en SU
+  // cuenta (Stripe le descuenta su comisión ahí) y la plataforma cobra su margen
+  // vía application_fee_amount. Así el dinero del organizador nunca pasa por el RFC
+  // de la plataforma (requisito fiscal en México).
+  const connectedAccountId = org.stripe_account_id;
   const intent = await getStripe().paymentIntents.create(
     {
       amount: fees.totalCents,
       currency: season.currency,
-      application_fee_amount: fees.platformFeeCents,
-      transfer_data: { destination: org.stripe_account_id },
+      application_fee_amount: fees.applicationFeeCents,
+      payment_method_types: ["card"],
       receipt_email: buyerEmail,
       metadata: { kind: "season", order_id: order.id, season_id: seasonId },
     },
-    { idempotencyKey }
+    { idempotencyKey, stripeAccount: connectedAccountId }
   );
   await db.from("orders").update({ stripe_payment_intent_id: intent.id }).eq("id", order.id);
 
-  return NextResponse.json({ orderId: order.id, clientSecret: intent.client_secret, fees });
+  return NextResponse.json({ orderId: order.id, clientSecret: intent.client_secret, connectedAccountId, fees });
 }
