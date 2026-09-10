@@ -91,6 +91,13 @@ export async function POST(req: Request) {
     // Método async (OXXO/SPEI): la ficha/referencia se emitió, el pago AÚN NO entra.
     // Extiende la reserva de inventario hasta el vencimiento de la ficha y avisa al
     // comprador con su liga de pago. NO se emiten boletos todavía.
+    //
+    // OJO: para OXXO el PaymentIntent emite la ficha en estado 'requires_action'
+    // (evento payment_intent.requires_action), NO 'processing' — este último no se
+    // dispara al emitir la ficha. Escuchamos ambos por robustez; el guard de
+    // asyncMethodFrom (next_action = oxxo_display_details) evita disparar en el
+    // requires_action de un 3DS de tarjeta.
+    case "payment_intent.requires_action":
     case "payment_intent.processing": {
       const pi = event.data.object as Stripe.PaymentIntent;
       const orderId = pi.metadata?.order_id;

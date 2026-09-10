@@ -271,6 +271,44 @@ describe("webhook — OXXO (pago asíncrono)", () => {
     expect(res.status).toBe(200);
     expect(h.db.rpcCalls.some((c) => c.fn === "mark_order_awaiting_payment")).toBe(false);
   });
+
+  it("OXXO emite la ficha en requires_action (no processing): marca 'awaiting'", async () => {
+    // Es el evento REAL que Stripe dispara al emitir la ficha OXXO.
+    withEvent({
+      type: "payment_intent.requires_action",
+      data: {
+        object: {
+          id: "pi_oxxo2",
+          metadata: { order_id: ORDER_ID },
+          next_action: {
+            type: "oxxo_display_details",
+            oxxo_display_details: { hosted_voucher_url: "https://voucher/oxxo2", expires_after: OXXO_EXPIRES },
+          },
+        },
+      },
+    });
+    const res = await post("firma-buena");
+    expect(res.status).toBe(200);
+    const call = h.db.rpcCalls.find((c) => c.fn === "mark_order_awaiting_payment");
+    expect(call?.args).toMatchObject({ p_order_id: ORDER_ID, p_method: "oxxo", p_voucher_url: "https://voucher/oxxo2" });
+    expect(sendBulkEmail).toHaveBeenCalled();
+  });
+
+  it("requires_action de un 3DS de tarjeta NO marca 'awaiting' (guard oxxo)", async () => {
+    withEvent({
+      type: "payment_intent.requires_action",
+      data: {
+        object: {
+          id: "pi_card_3ds",
+          metadata: { order_id: ORDER_ID },
+          next_action: { type: "use_stripe_sdk", use_stripe_sdk: {} },
+        },
+      },
+    });
+    const res = await post("firma-buena");
+    expect(res.status).toBe(200);
+    expect(h.db.rpcCalls.some((c) => c.fn === "mark_order_awaiting_payment")).toBe(false);
+  });
 });
 
 describe("webhook — doble secreto", () => {
