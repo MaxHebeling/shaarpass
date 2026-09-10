@@ -3,6 +3,7 @@ import { CheckCircle2, AlertCircle, Zap, Wallet, Calendar } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { getUserOrg } from "@/lib/org";
 import { ConnectButton } from "@/components/dashboard/ConnectButton";
+import { FeeModeToggle } from "@/components/dashboard/FeeModeToggle";
 
 export const dynamic = "force-dynamic";
 
@@ -84,6 +85,8 @@ export default async function PagosPage() {
           </div>
         </div>
       </div>
+
+      <FeeModeToggle initial={org.absorb_fees} />
 
       <div className="mt-6 grid gap-4 sm:grid-cols-2">
         <Perk title="Pagos directos" body="El dinero llega a tu cuenta de Stripe, no a un intermediario que lo retiene." />
