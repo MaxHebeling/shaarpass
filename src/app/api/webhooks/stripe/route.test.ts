@@ -201,22 +201,23 @@ describe("webhook — pago fallido y Connect", () => {
     expect(h.db.rpcCalls).toContainEqual({ fn: "release_listing", args: { p_listing: "l_9" } });
   });
 
-  it("account.updated habilita pagos solo si la cuenta está completa", async () => {
+  it("account.updated: cuenta completa → puede vender y payouts habilitados", async () => {
     withEvent({
       type: "account.updated",
       data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: true, details_submitted: true, requirements: {} } },
     });
     await post("firma-buena");
-    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({ payouts_enabled: true });
+    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({ charges_enabled: true, payouts_enabled: true });
   });
 
-  it("account.updated con requisitos pendientes deshabilita pagos", async () => {
+  it("account.updated: charges ok pero verificación de payout pendiente → vende, payouts NO", async () => {
     withEvent({
       type: "account.updated",
-      data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: true, details_submitted: true, requirements: { disabled_reason: "requirements.past_due" } } },
+      data: { object: { id: "acct_1", charges_enabled: true, payouts_enabled: false, details_submitted: true, requirements: { disabled_reason: "requirements.pending_verification" } } },
     });
     await post("firma-buena");
-    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({ payouts_enabled: false });
+    // charges_enabled=true (ya vende), payouts_enabled=false (Stripe aún verifica).
+    expect(h.db.queries.find((q) => q.table === "organizations")?.payload).toEqual({ charges_enabled: true, payouts_enabled: false });
   });
 
   it("un tipo de evento desconocido se acusa con 200 (no reintentar)", async () => {

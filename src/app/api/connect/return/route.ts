@@ -14,11 +14,14 @@ export async function GET() {
 
   if (org?.stripe_account_id) {
     const account = await getStripe().accounts.retrieve(org.stripe_account_id);
-    const enabled = Boolean(
+    // charges_enabled = puede VENDER ya (cargo directo); payouts_enabled = totalmente
+    // habilitado (ya recibe depósitos al banco).
+    const canSell = Boolean(account.charges_enabled);
+    const fullyEnabled = Boolean(
       account.charges_enabled && account.payouts_enabled && account.details_submitted
       && !account.requirements?.disabled_reason
     );
-    await db.from("organizations").update({ payouts_enabled: enabled }).eq("id", org.id);
+    await db.from("organizations").update({ charges_enabled: canSell, payouts_enabled: fullyEnabled }).eq("id", org.id);
   }
 
   return NextResponse.redirect(new URL("/dashboard/pagos?synced=1", base));
