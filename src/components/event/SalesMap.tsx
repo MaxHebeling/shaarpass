@@ -16,8 +16,8 @@ interface SeatPoint { id: string; venueSeatId: string; label: string; x: number;
 interface Sel { zoneId: string; ticketTypeId: string; priceCents: number; label: string; }
 
 export function SalesMap({
-  eventId, eventSlug, currency, widthM, heightM, zones,
-}: { eventId: string; eventSlug: string; currency: string; widthM: number; heightM: number; zones: SalesZone[] }) {
+  eventId, eventSlug, currency, widthM, heightM, zones, absorbFees = false,
+}: { eventId: string; eventSlug: string; currency: string; widthM: number; heightM: number; zones: SalesZone[]; absorbFees?: boolean }) {
   const [openZone, setOpenZone] = useState<SalesZone | null>(null);
   const [seats, setSeats] = useState<SeatPoint[]>([]);
   const [loadingSeats, setLoadingSeats] = useState(false);
@@ -81,9 +81,9 @@ export function SalesMap({
   const chosen = Object.entries(selected);
   const totals = useMemo(() => {
     const subtotal = chosen.reduce((s, [, v]) => s + v.priceCents, 0);
-    const fee = ourFeeCents(subtotal, chosen.length, currency);
+    const fee = absorbFees ? 0 : ourFeeCents(subtotal, chosen.length, currency);
     return { subtotal, fee, total: subtotal + fee };
-  }, [chosen, currency]);
+  }, [chosen, currency, absorbFees]);
 
   // TM-5: filtro de precio (macro) + best-available (zona).
   const priceRange = useMemo(() => {
@@ -206,7 +206,7 @@ export function SalesMap({
             {chosen.map(([id, v]) => <span key={id} className="rounded-full bg-fuchsia/15 px-2 py-0.5 text-xs">{v.label}</span>)}
           </div>
           <div className="flex justify-between text-muted"><span>{chosen.length} asientos</span><span>{money(totals.subtotal, currency)}</span></div>
-          <div className="flex justify-between text-muted"><span>Comisión</span><span>{money(totals.fee, currency)}</span></div>
+          {totals.fee > 0 && <div className="flex justify-between text-muted"><span>Comisión</span><span>{money(totals.fee, currency)}</span></div>}
           <div className="mt-1 flex justify-between font-display text-lg font-bold"><span>Total</span><span className="text-gold">{money(totals.total, currency)}</span></div>
           <button onClick={checkout} disabled={going} className="brand-gradient mt-3 flex w-full items-center justify-center gap-2 rounded-2xl py-3 font-semibold text-ink disabled:opacity-50">
             {going ? <Loader2 className="h-4 w-4 animate-spin" /> : <Ticket className="h-4 w-4" />} Continuar al pago

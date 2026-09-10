@@ -60,7 +60,7 @@ function setup(o: Overrides = {}) {
     max_tickets_per_buyer: null,
     presale_enabled: false,
     presale_ends_at: null,
-    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true },
+    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false },
     ...o.event,
   };
   const price = o.priceCents ?? PRICE_CENTS;
@@ -224,7 +224,7 @@ describe("checkout — el cobro cuadra", () => {
     expect(params).toMatchObject({
       amount: expected.totalCents,
       currency: "mxn",
-      application_fee_amount: expected.platformFeeCents,
+      application_fee_amount: expected.applicationFeeCents, // margen (cargo directo)
       payment_method_types: ["card", "oxxo"], // MXN dentro del rango de OXXO
       receipt_email: "ana@test.mx",
       metadata: { order_id: ORDER_ID, event_id: EVENT_ID },
@@ -234,10 +234,23 @@ describe("checkout — el cobro cuadra", () => {
     expect(opts).toMatchObject({ stripeAccount: "acct_org_123" });
   });
 
-  it("invariante: amount = neto del organizador + application_fee", async () => {
+  it("cargo directo: application_fee = MARGEN (no el fee con gross-up)", async () => {
+    // Stripe le cobra su comisión a la cuenta del organizador; la plataforma solo su margen.
     await post(body());
+    const expected = computeFees(PRICE_CENTS * QTY, QTY, "mxn", 0);
     const [params] = h.paymentIntentsCreate.mock.calls[0];
-    expect(params.amount).toBe(PRICE_CENTS * QTY + params.application_fee_amount);
+    expect(params.amount).toBe(expected.totalCents);                 // comprador paga con gross-up
+    expect(params.application_fee_amount).toBe(expected.marginCents); // plataforma cobra su margen
+  });
+
+  it("modo absorbido: el comprador paga el precio de lista y application_fee = margen", async () => {
+    setup({ event: { organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: true } } });
+    await post(body());
+    const expected = computeFees(PRICE_CENTS * QTY, QTY, "mxn", 0, true);
+    const [params] = h.paymentIntentsCreate.mock.calls[0];
+    expect(params.amount).toBe(PRICE_CENTS * QTY);                    // precio de lista exacto, sin fee
+    expect(params.amount).toBe(expected.totalCents);
+    expect(params.application_fee_amount).toBe(expected.marginCents); // plataforma sigue cobrando margen
   });
 
   it("el precio sale de la BD, no del cliente", async () => {

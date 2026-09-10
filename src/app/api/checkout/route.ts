@@ -66,7 +66,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, charges_enabled, payouts_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -87,7 +87,7 @@ export async function POST(req: Request) {
     const { data: ok } = await db.rpc("validate_presale_code", { p_event: eventId, p_code: presaleCode ?? "" });
     if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
-  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean };
+  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean; absorb_fees: boolean };
 
   // Precios autoritativos desde la BD (nunca confíes en el cliente).
   const ids = items.map((i) => i.ticketTypeId);
@@ -175,7 +175,7 @@ export async function POST(req: Request) {
   // El procesamiento de Stripe aplica a TODO el cargo (boletos + extras): los
   // extras van como passthrough (al organizador, sin margen, pero con su parte
   // de procesamiento cubierta por el gross-up).
-  const fees = computeFees(subtotalCents, ticketCount, event.currency, servicesTotal);
+  const fees = computeFees(subtotalCents, ticketCount, event.currency, servicesTotal, org?.absorb_fees ?? false);
   const orderTotal = fees.totalCents;
   const isFree = orderTotal <= 0;
 
@@ -202,7 +202,7 @@ export async function POST(req: Request) {
       subtotal_cents: subtotalCents,
       discount_cents: discountCents,
       promo_code_id: promoId,
-      platform_fee_cents: fees.platformFeeCents,
+      platform_fee_cents: fees.applicationFeeCents, // lo que realmente cobra la plataforma
       total_cents: orderTotal,
       currency: event.currency,
       idempotency_key: idempotencyKey,
@@ -275,9 +275,11 @@ export async function POST(req: Request) {
   }
 
   // 4) PaymentIntent con CARGO DIRECTO sobre la cuenta Connect del organizador:
-  //    el cargo (y el dinero) vive en SU cuenta, no en la plataforma —
-  //    application_fee_amount = nuestra comisión. Así el dinero del organizador
-  //    nunca pasa por el RFC de la plataforma (requisito fiscal en México).
+  //    el cargo (y el dinero) vive en SU cuenta, no en la plataforma. En cargo
+  //    directo Stripe le descuenta SU comisión a la cuenta del organizador, y la
+  //    plataforma cobra por separado application_fee_amount = SU MARGEN
+  //    (applicationFeeCents). Así el dinero del organizador nunca pasa por el RFC
+  //    de la plataforma (requisito fiscal en México).
   //    Para MXN habilitamos OXXO (efectivo, asíncrono): el pago NO entra al
   //    confirmar; se emite una ficha y se cobra vía webhook cuando el comprador
   //    paga en la tienda. La reserva de inventario se extiende en ese momento.
@@ -286,7 +288,7 @@ export async function POST(req: Request) {
   const intentParams: Stripe.PaymentIntentCreateParams = {
     amount: orderTotal,
     currency: event.currency,
-    application_fee_amount: fees.platformFeeCents,
+    application_fee_amount: fees.applicationFeeCents,
     payment_method_types: methods as Stripe.PaymentIntentCreateParams["payment_method_types"],
     payment_method_options: paymentMethodOptions(methods) as Stripe.PaymentIntentCreateParams["payment_method_options"],
     receipt_email: buyerEmail,

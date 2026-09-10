@@ -20,8 +20,8 @@ export interface SeatData {
 export interface TierInfo { id: string; name: string; price_cents: number; }
 
 export function SeatMap({
-  eventId, eventSlug, currency, seats, tiers,
-}: { eventId: string; eventSlug: string; currency: string; seats: SeatData[]; tiers: TierInfo[] }) {
+  eventId, eventSlug, currency, seats, tiers, absorbFees = false,
+}: { eventId: string; eventSlug: string; currency: string; seats: SeatData[]; tiers: TierInfo[]; absorbFees?: boolean }) {
   const [selected, setSelected] = useState<Record<string, SeatData>>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -60,9 +60,9 @@ export function SeatMap({
   const chosen = Object.values(selected);
   const totals = useMemo(() => {
     const subtotal = chosen.reduce((sum, s) => sum + (tierMap.get(s.ticket_type_id)?.price_cents ?? 0), 0);
-    const fee = ourFeeCents(subtotal, chosen.length, currency);
+    const fee = absorbFees ? 0 : ourFeeCents(subtotal, chosen.length, currency);
     return { subtotal, fee, total: subtotal + fee };
-  }, [chosen, tierMap, currency]);
+  }, [chosen, tierMap, currency, absorbFees]);
 
   function checkout() {
     setLoading(true);
@@ -149,7 +149,7 @@ export function SeatMap({
                 ))}
               </div>
               <div className="flex justify-between text-muted"><span>{chosen.length} asientos</span><span>{money(totals.subtotal, currency)}</span></div>
-              <div className="flex justify-between text-muted"><span>Comisión (incluye procesamiento)</span><span>{money(totals.fee, currency)}</span></div>
+              {totals.fee > 0 && <div className="flex justify-between text-muted"><span>Comisión (incluye procesamiento)</span><span>{money(totals.fee, currency)}</span></div>}
               <div className="mt-1 flex justify-between font-display text-lg font-bold"><span>Total</span><span className="text-gold">{money(totals.total, currency)}</span></div>
             </div>
           </motion.div>

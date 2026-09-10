@@ -39,6 +39,8 @@ export default function CheckoutPage() {
   const [services, setServices] = useState<Service[]>([]);
   const [svcQty, setSvcQty] = useState<Record<string, number>>({});
   const [presaleCode, setPresaleCode] = useState("");
+  // Modelo de comisión del organizador: si absorbe, el comprador paga el precio de lista.
+  const [absorbFees, setAbsorbFees] = useState(false);
 
   useEffect(() => {
     const raw = sessionStorage.getItem(`cart:${slug}`);
@@ -47,10 +49,16 @@ export default function CheckoutPage() {
 
   useEffect(() => {
     if (!cart) return;
-    createClient()
-      .from("services").select("id, name, kind, price_cents, max_per_order")
+    const db = createClient();
+    db.from("services").select("id, name, kind, price_cents, max_per_order")
       .eq("event_id", cart.eventId).eq("active", true)
       .then(({ data }) => setServices(data ?? []));
+    // Modelo de comisión del organizador (para reflejar el total correcto).
+    db.from("events").select("organizations(absorb_fees)").eq("id", cart.eventId).maybeSingle()
+      .then(({ data }) => {
+        const org = (data as { organizations: { absorb_fees: boolean } | null } | null)?.organizations;
+        setAbsorbFees(!!org?.absorb_fees);
+      });
   }, [cart]);
 
   const totals = useMemo(() => {
@@ -60,10 +68,11 @@ export default function CheckoutPage() {
     const discount = Math.min(promo?.discount ?? 0, gross);
     const subtotal = Math.max(0, gross - discount);
     const servicesTotal = services.reduce((s, sv) => s + sv.price_cents * (svcQty[sv.id] ?? 0), 0);
-    // La comisión incluye el procesamiento de Stripe sobre TODO el cargo (boletos + extras).
-    const fee = ourFeeCents(subtotal, count, cart.currency, servicesTotal);
+    // Modo absorbido: el comprador paga el precio de lista (sin fee añadido).
+    // Modo passed: la comisión incluye el procesamiento de Stripe sobre TODO el cargo.
+    const fee = absorbFees ? 0 : ourFeeCents(subtotal, count, cart.currency, servicesTotal);
     return { count, gross, discount, subtotal, fee, servicesTotal, total: subtotal + servicesTotal + fee };
-  }, [cart, promo, services, svcQty]);
+  }, [cart, promo, services, svcQty, absorbFees]);
 
   async function applyPromo() {
     if (!cart || !promoInput.trim()) return;
@@ -169,10 +178,12 @@ export default function CheckoutPage() {
               <span>−{money(totals.discount, cart.currency)}</span>
             </div>
           )}
-          <div className="flex justify-between text-muted">
-            <span>Comisión de servicio <span className="text-[11px]">(incluye procesamiento de pago)</span></span>
-            <span>{money(totals.fee, cart.currency)}</span>
-          </div>
+          {totals.fee > 0 && (
+            <div className="flex justify-between text-muted">
+              <span>Comisión de servicio <span className="text-[11px]">(incluye procesamiento de pago)</span></span>
+              <span>{money(totals.fee, cart.currency)}</span>
+            </div>
+          )}
           {totals.servicesTotal > 0 && (
             <div className="flex justify-between text-muted"><span>Extras</span><span>{money(totals.servicesTotal, cart.currency)}</span></div>
           )}
