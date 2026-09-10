@@ -62,7 +62,7 @@ interface EventRow {
   queue_enabled: boolean;
   onsale_at: string | null;
   presale_enabled: boolean;
-  organizations: { name: string; logo_url: string | null; brand_color: string | null; white_label: boolean } | null;
+  organizations: { name: string; logo_url: string | null; brand_color: string | null; white_label: boolean; absorb_fees: boolean } | null;
   venues: { name: string; address: string | null; city: string | null } | null;
 }
 
@@ -81,12 +81,15 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
 
   const { data: event } = await db
     .from("events")
-    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, presale_enabled, organizations(name, logo_url, brand_color, white_label), venues(name, address, city)")
+    .select("id, title, description, cover_image, category, starts_at, ends_at, timezone, currency, is_online, city, region, queue_enabled, onsale_at, presale_enabled, organizations(name, logo_url, brand_color, white_label, absorb_fees), venues(name, address, city)")
     .eq("slug", slug)
     .eq("status", "published")
     .maybeSingle<EventRow>();
 
   if (!event) notFound();
+
+  // Modelo de comisión del organizador: si absorbe, el comprador ve el precio de lista.
+  const absorbFees = event.organizations?.absorb_fees ?? false;
 
   const { data: types } = await db
     .from("ticket_types")
@@ -293,11 +296,11 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         <aside className="lg:sticky lg:top-24 lg:self-start">
           <QueueGate eventId={event.id} enabled={event.queue_enabled} onsaleAt={event.onsale_at}>
             {hasVenueMap ? (
-              <SalesMap eventId={event.id} eventSlug={slug} currency={event.currency} widthM={mapW} heightM={mapH} zones={salesZones} />
+              <SalesMap eventId={event.id} eventSlug={slug} currency={event.currency} widthM={mapW} heightM={mapH} zones={salesZones} absorbFees={absorbFees} />
             ) : isSeated ? (
-              <SeatMap eventId={event.id} eventSlug={slug} currency={event.currency} seats={seats} tiers={seatTiers} />
+              <SeatMap eventId={event.id} eventSlug={slug} currency={event.currency} seats={seats} tiers={seatTiers} absorbFees={absorbFees} />
             ) : (
-              <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} />
+              <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} absorbFees={absorbFees} />
             )}
           </QueueGate>
           {event.presale_enabled && <PresaleRegister eventId={event.id} />}

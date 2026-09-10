@@ -16,7 +16,7 @@ export interface SelectableTicket {
   max_per_order: number;
 }
 
-export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: string; eventSlug: string; tickets: SelectableTicket[] }) {
+export function TicketSelector({ eventId, eventSlug, tickets, absorbFees = false }: { eventId: string; eventSlug: string; tickets: SelectableTicket[]; absorbFees?: boolean }) {
   const [qty, setQty] = useState<Record<string, number>>({});
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -25,9 +25,10 @@ export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: strin
   const { count, subtotal, fee, total } = useMemo(() => {
     const count = Object.values(qty).reduce((a, b) => a + b, 0);
     const subtotal = tickets.reduce((s, t) => s + (qty[t.id] ?? 0) * t.price_cents, 0);
-    const fee = ourFeeCents(subtotal, count, currency);
+    // Absorbido: el comprador paga el precio de lista (sin fee añadido).
+    const fee = absorbFees ? 0 : ourFeeCents(subtotal, count, currency);
     return { count, subtotal, fee, total: subtotal + fee };
-  }, [qty, tickets, currency]);
+  }, [qty, tickets, currency, absorbFees]);
 
   function set(id: string, delta: number, max: number) {
     setQty((q) => {
@@ -99,7 +100,7 @@ export function TicketSelector({ eventId, eventSlug, tickets }: { eventId: strin
           >
             <div className="mt-5 space-y-1.5 border-t border-line pt-4 text-sm">
               <Row label={`Subtotal (${count} ${count === 1 ? "boleto" : "boletos"})`} value={money(subtotal, currency)} />
-              <Row label="Comisión de servicio" value={money(fee, currency)} muted hint="incluye procesamiento · transparente" />
+              {fee > 0 && <Row label="Comisión de servicio" value={money(fee, currency)} muted hint="incluye procesamiento · transparente" />}
               <Row label="Total" value={money(total, currency)} big />
             </div>
           </motion.div>

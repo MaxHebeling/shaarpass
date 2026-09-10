@@ -41,4 +41,38 @@ describe("computeFees — invariantes del cobro", () => {
     // Pero el organizador recibe los extras completos.
     expect(conExtra.totalCents).toBeGreaterThanOrEqual(sinExtra.totalCents + 5000);
   });
+
+  it("cargo directo: application_fee = MARGEN (no el fee con gross-up)", () => {
+    // En cargo directo Stripe le cobra su comisión a la cuenta del organizador;
+    // la plataforma solo cobra su margen vía application_fee_amount.
+    const f = computeFees(100000, 1, "mxn");
+    expect(f.applicationFeeCents).toBe(f.marginCents);
+    expect(f.applicationFeeCents).toBeLessThan(f.platformFeeCents); // el fee al comprador incluye procesamiento
+  });
+});
+
+describe("computeFees — modo absorbido (organizador absorbe comisiones)", () => {
+  it("el comprador paga el precio de lista exacto (sin fee añadido)", () => {
+    const f = computeFees(100000, 1, "mxn", 0, true);
+    expect(f.totalCents).toBe(100000);      // comprador paga $1,000 exactos
+    expect(f.platformFeeCents).toBe(0);      // no se añade fee al comprador
+    expect(f.absorbFees).toBe(true);
+  });
+
+  it("la plataforma sigue cobrando su margen vía application_fee", () => {
+    const f = computeFees(100000, 1, "mxn", 0, true);
+    expect(f.applicationFeeCents).toBe(f.marginCents);
+    expect(f.marginCents).toBe(2050); // 2% de 100000 + 50 = 2050
+  });
+
+  it("incluye extras en el precio de lista (comprador paga face de boletos + extras)", () => {
+    const f = computeFees(100000, 1, "mxn", 20000, true);
+    expect(f.totalCents).toBe(120000);
+  });
+
+  it("evento gratis en modo absorbido = todo en cero", () => {
+    const f = computeFees(0, 2, "mxn", 0, true);
+    expect(f.totalCents).toBe(0);
+    expect(f.applicationFeeCents).toBe(0);
+  });
 });
