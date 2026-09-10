@@ -15,6 +15,7 @@ export default function ResaleCheckout() {
   const [gone, setGone] = useState(false);
   const [email, setEmail] = useState("");
   const [clientSecret, setClientSecret] = useState<string | null>(null);
+  const [connectedAccountId, setConnectedAccountId] = useState<string | undefined>(undefined);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const idem = useRef(crypto.randomUUID());
@@ -36,6 +37,7 @@ export default function ResaleCheckout() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "No se pudo iniciar el pago");
       if (!data.clientSecret) throw new Error("Falta configurar Stripe (claves de pago).");
+      setConnectedAccountId(data.connectedAccountId); // cargo directo: Stripe.js sobre la cuenta del vendedor
       setClientSecret(data.clientSecret);
     } catch (err) { setError((err as Error).message); } finally { setLoading(false); }
   }
@@ -65,7 +67,7 @@ export default function ResaleCheckout() {
             </button>
           </form>
         ) : (
-          <Elements stripe={getStripePromise()} options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#d6219b" } } }}>
+          <Elements stripe={getStripePromise(connectedAccountId)} options={{ clientSecret, appearance: { theme: "night", variables: { colorPrimary: "#d6219b" } } }}>
             <PayForm listingId={listingId} />
           </Elements>
         )}

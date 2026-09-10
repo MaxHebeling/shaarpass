@@ -44,7 +44,9 @@ export async function POST(req: Request) {
     const account = await stripe.accounts.create({
       type: "express",
       email,
-      capabilities: { transfers: { requested: true } },
+      // card_payments = poder recibir el cargo DIRECTO del comprador; transfers para
+      // compatibilidad. (Modelo nuevo: el comprador paga directo a esta cuenta.)
+      capabilities: { card_payments: { requested: true }, transfers: { requested: true } },
       metadata: { seller_email: email },
     });
     accountId = account.id;
@@ -55,10 +57,12 @@ export async function POST(req: Request) {
   const ret = new URL(`${base}/api/seller/return`);
   ret.searchParams.set("email", email);
   if (claim) ret.searchParams.set("claim", claim);
+  // Pre-listado: al volver, regresa al boleto para completar la publicación.
+  if (parsed.data.token && !claim) ret.searchParams.set("token", parsed.data.token);
 
   const link = await stripe.accountLinks.create({
     account: accountId,
-    refresh_url: claim ? `${base}/cobrar/${claim}` : `${base}/cobrar/listo`,
+    refresh_url: claim ? `${base}/cobrar/${claim}` : parsed.data.token ? `${base}/t/${parsed.data.token}` : `${base}/cobrar/listo`,
     return_url: ret.toString(),
     type: "account_onboarding",
   });

@@ -17,6 +17,13 @@ export async function POST(req: Request) {
 
   const { data: listingId, error } = await db.rpc("list_ticket", { p_token: parsed.data.token, p_price_cents: parsed.data.priceCents });
   if (error) {
+    // El vendedor debe conectar su cuenta ANTES de publicar (cargo directo).
+    if (error.message.includes("SELLER_NOT_CONNECTED")) {
+      return NextResponse.json(
+        { error: "Conecta tu cuenta para cobrar antes de poner el boleto en reventa.", code: "SELLER_NOT_CONNECTED" },
+        { status: 409 },
+      );
+    }
     const msg = error.message.includes("superar") ? error.message : "No se pudo poner en reventa";
     return NextResponse.json({ error: msg }, { status: 409 });
   }

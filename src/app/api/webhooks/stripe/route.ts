@@ -154,21 +154,16 @@ export async function POST(req: Request) {
             await sendBulkEmail([buyer], "Compraste un boleto en reventa (ShaarPass)", `Tu boleto seguro: ${base}/t/${newToken}`);
           } catch { /* best-effort */ }
 
-          // Desembolso al vendedor: avisa + paga ya si su cuenta está conectada.
+          // Cargo DIRECTO: el dinero ya está en la cuenta del vendedor (no hay payout
+          // que procesar). Solo le avisamos de la venta.
           try {
-            const { data: payout } = await db
-              .from("resale_payouts")
-              .select("id, seller_email, claim_token")
-              .eq("listing_id", pi.metadata.listing_id).eq("status", "owed")
-              .order("created_at", { ascending: false }).limit(1).maybeSingle();
-            if (payout) {
+            const { data: l } = await db.from("listings").select("seller_email").eq("id", pi.metadata.listing_id).maybeSingle();
+            if (l?.seller_email) {
               const { sendBulkEmail } = await import("@/lib/email/campaigns");
-              await sendBulkEmail([payout.seller_email], "Tu boleto se vendió — cobra tu dinero (ShaarPass)",
-                `¡Buenas noticias! Tu boleto en reventa se vendió. Cobra tu dinero aquí: ${base}/cobrar/${payout.claim_token}`);
-              const { processPayout } = await import("@/lib/resale/payout");
-              await processPayout(db, payout.id); // no-op si aún no conecta su cuenta
+              await sendBulkEmail([l.seller_email], "Tu boleto se vendió (ShaarPass)",
+                "¡Buenas noticias! Tu boleto en reventa se vendió y el dinero llega directo a tu cuenta de Stripe. Puedes ver el depósito en tu panel de Stripe Express.");
             }
-          } catch { /* best-effort; el cron reintenta */ }
+          } catch { /* best-effort */ }
         }
         break;
       }
@@ -218,6 +213,14 @@ export async function POST(req: Request) {
           payouts_enabled: fullyEnabled,
           oxxo_enabled: caps.oxxo_payments === "active",
           spei_enabled: caps.mx_bank_transfer_payments === "active",
+        })
+        .eq("stripe_account_id", account.id);
+      // El mismo evento puede ser de la cuenta de un VENDEDOR de reventa (cargo directo).
+      await db
+        .from("seller_accounts")
+        .update({
+          charges_enabled: canSell,
+          payouts_enabled: Boolean(account.payouts_enabled && caps.transfers === "active"),
         })
         .eq("stripe_account_id", account.id);
       break;

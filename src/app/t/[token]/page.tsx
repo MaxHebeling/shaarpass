@@ -27,6 +27,7 @@ export default function MobileTicketPage() {
   const [actionMsg, setActionMsg] = useState<string | null>(null);
   const [transferred, setTransferred] = useState(false);
   const [listed, setListed] = useState(false);
+  const [needsConnect, setNeedsConnect] = useState(false);
   const [busy, setBusy] = useState(false);
 
   async function doTransfer() {
@@ -37,10 +38,11 @@ export default function MobileTicketPage() {
     setTransferred(true);
   }
   async function doList() {
-    setBusy(true); setActionMsg(null);
+    setBusy(true); setActionMsg(null); setNeedsConnect(false);
     const res = await fetch("/api/ticket/list", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token, priceCents: Math.round(Number(price) * 100) }) });
     const data = await res.json(); setBusy(false);
-    if (res.ok) { setListed(true); setActionMsg("✅ En reventa al precio justo. Comparte el enlace de tu evento."); }
+    if (res.ok) { setListed(true); setActionMsg("✅ En reventa al precio justo. El dinero te llega directo a tu cuenta cuando se venda."); }
+    else if (data.code === "SELLER_NOT_CONNECTED") { setNeedsConnect(true); setActionMsg(data.error); }
     else setActionMsg(data.error || "Error");
   }
 
@@ -159,8 +161,9 @@ export default function MobileTicketPage() {
               </div>
             )}
             {actionMsg && <p className="mt-2 text-xs text-muted">{actionMsg}</p>}
-            {listed && <SellerPayoutButton token={token} label="Conectar cuenta para cobrar cuando se venda" />}
-            <p className="mt-2 text-center text-[11px] text-muted">Reventa topada al precio original · sin scalping</p>
+            {/* Modelo nuevo: el vendedor conecta ANTES de publicar (cargo directo). */}
+            {needsConnect && <SellerPayoutButton token={token} label="Conectar mi cuenta para revender" />}
+            <p className="mt-2 text-center text-[11px] text-muted">Reventa topada al precio original · sin scalping · el pago llega directo a tu cuenta</p>
           </div>
         )}
       </div>
