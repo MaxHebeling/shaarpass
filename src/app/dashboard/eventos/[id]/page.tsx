@@ -17,6 +17,7 @@ import { EventDetailsEditor } from "@/components/dashboard/EventDetailsEditor";
 import { TicketTypesEditor } from "@/components/dashboard/TicketTypesEditor";
 import { EventStats, type DayPoint } from "@/components/dashboard/EventStats";
 import { StaffPanel, type StaffRow } from "@/components/dashboard/StaffPanel";
+import { DoorSale } from "@/components/dashboard/DoorSale";
 import { CheckinAnalytics, type Bucket, type RecentScan } from "@/components/dashboard/CheckinAnalytics";
 import { ShareEvent } from "@/components/dashboard/ShareEvent";
 
@@ -256,6 +257,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
             content: (
               <>
                 <StaffPanel eventId={id} eventTitle={event.title} initial={staffRows ?? []} />
+                <DoorSale eventId={id} ticketTypes={(types ?? []).filter((t) => !t.is_seated).map((t) => ({ id: t.id, name: t.name, price_cents: t.price_cents }))} />
                 <QueueControl eventId={id} enabled={event.queue_enabled} onsaleAt={event.onsale_at} waveSize={event.queue_wave_size} maxPerBuyer={event.max_tickets_per_buyer} safetix={event.safetix_enabled} />
                 <PresaleControl eventId={id} enabled={event.presale_enabled} endsAt={event.presale_ends_at} registered={presaleReg ?? 0} selected={presaleSel ?? 0} />
               </>
