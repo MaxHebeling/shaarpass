@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, BarChart3, Pencil, Ticket as TicketIcon, ShoppingBag, DoorOpen, Map as MapIcon, Megaphone } from "lucide-react";
+import { ArrowLeft, ExternalLink, BarChart3, Pencil, Ticket as TicketIcon, ShoppingBag, DoorOpen, Map as MapIcon, Megaphone, Download } from "lucide-react";
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 import { createClient } from "@/lib/supabase/server";
 import { PromoManager, type PromoRow } from "@/components/dashboard/PromoManager";
@@ -236,7 +236,20 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
           },
           {
             id: "ordenes", label: "Órdenes", icon: <ShoppingBag className="h-4 w-4" />,
-            content: <OrdersPanel eventId={id} currency={event.currency} cancelled={event.status === "cancelled"} initial={orders ?? []} />,
+            content: (
+              <div className="space-y-4">
+                <div className="flex justify-end">
+                  <a
+                    href={`/api/dashboard/events/${id}/attendees`}
+                    download
+                    className="glass flex items-center gap-1.5 rounded-full px-4 py-2 text-sm transition hover:border-white/20"
+                  >
+                    <Download className="h-4 w-4" /> Descargar asistentes (CSV)
+                  </a>
+                </div>
+                <OrdersPanel eventId={id} currency={event.currency} cancelled={event.status === "cancelled"} initial={orders ?? []} />
+              </div>
+            ),
           },
           {
             id: "acceso", label: "Acceso", icon: <DoorOpen className="h-4 w-4" />,
