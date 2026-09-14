@@ -9,6 +9,7 @@ import { getStripePromise } from "@/lib/stripe/browser";
 import { createClient } from "@/lib/supabase/browser";
 import { money } from "@/lib/money";
 import { ourFeeCents } from "@/lib/ticketing/feeMath";
+import { parseCustomFields, type CustomField } from "@/lib/ticketing/customFields";
 
 interface CartItem { ticketTypeId: string; name: string; price_cents: number; quantity: number; seatIds?: string[]; eventSeatIds?: string[]; seatLabels?: string[]; }
 interface Cart { eventId: string; eventSlug: string; currency: string; items: CartItem[]; }
@@ -41,6 +42,9 @@ export default function CheckoutPage() {
   const [presaleCode, setPresaleCode] = useState("");
   // Modelo de comisión del organizador: si absorbe, el comprador paga el precio de lista.
   const [absorbFees, setAbsorbFees] = useState(false);
+  // Campos de registro personalizados del evento.
+  const [customFields, setCustomFields] = useState<CustomField[]>([]);
+  const [customData, setCustomData] = useState<Record<string, string>>({});
 
   useEffect(() => {
     const raw = sessionStorage.getItem(`cart:${slug}`);
@@ -53,11 +57,12 @@ export default function CheckoutPage() {
     db.from("services").select("id, name, kind, price_cents, max_per_order")
       .eq("event_id", cart.eventId).eq("active", true)
       .then(({ data }) => setServices(data ?? []));
-    // Modelo de comisión del organizador (para reflejar el total correcto).
-    db.from("events").select("organizations(absorb_fees)").eq("id", cart.eventId).maybeSingle()
+    // Modelo de comisión del organizador + campos de registro personalizados.
+    db.from("events").select("custom_fields, organizations(absorb_fees)").eq("id", cart.eventId).maybeSingle()
       .then(({ data }) => {
-        const org = (data as { organizations: { absorb_fees: boolean } | null } | null)?.organizations;
-        setAbsorbFees(!!org?.absorb_fees);
+        const row = data as { custom_fields?: unknown; organizations: { absorb_fees: boolean } | null } | null;
+        setAbsorbFees(!!row?.organizations?.absorb_fees);
+        setCustomFields(parseCustomFields(row?.custom_fields));
       });
   }, [cart]);
 
@@ -123,6 +128,7 @@ export default function CheckoutPage() {
           services: services.filter((s) => (svcQty[s.id] ?? 0) > 0).map((s) => ({ serviceId: s.id, quantity: svcQty[s.id] })),
           queueToken: sessionStorage.getItem(`queue:${cart.eventId}`) ?? undefined,
           presaleCode: presaleCode || undefined,
+          customData: customFields.length ? customData : undefined,
         }),
       });
       const data = await res.json();
@@ -278,6 +284,31 @@ export default function CheckoutPage() {
             <input type="tel" value={phone} onChange={(e) => setPhone(e.target.value)} maxLength={30} placeholder="+54 9 387 123 4567"
               className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60" />
           </div>
+          {customFields.map((f) => (
+            <div key={f.key}>
+              <label className="mb-1.5 block text-xs text-muted">{f.label}{f.required ? " *" : ""}</label>
+              {f.type === "select" ? (
+                <select
+                  required={f.required}
+                  value={customData[f.key] ?? ""}
+                  onChange={(e) => setCustomData((d) => ({ ...d, [f.key]: e.target.value }))}
+                  className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60"
+                >
+                  <option value="">Selecciona…</option>
+                  {(f.options ?? []).map((o) => <option key={o} value={o}>{o}</option>)}
+                </select>
+              ) : (
+                <input
+                  type={f.type === "tel" ? "tel" : f.type === "email" ? "email" : "text"}
+                  required={f.required}
+                  maxLength={500}
+                  value={customData[f.key] ?? ""}
+                  onChange={(e) => setCustomData((d) => ({ ...d, [f.key]: e.target.value }))}
+                  className="w-full rounded-xl border border-line bg-surface/60 px-4 py-3 text-sm outline-none focus:border-fuchsia/60"
+                />
+              )}
+            </div>
+          ))}
           <div>
             <label className="mb-1.5 block text-xs text-muted">Código de presale (si aplica)</label>
             <input

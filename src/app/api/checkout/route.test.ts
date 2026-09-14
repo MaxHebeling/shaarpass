@@ -265,6 +265,21 @@ describe("checkout — el cobro cuadra", () => {
     expect(params.customer).toBe("cus_test_123");
   });
 
+  it("campo personalizado requerido faltante → 400 sin cobrar", async () => {
+    setup({ event: { custom_fields: [{ key: "empresa", label: "Empresa", type: "text", required: true }] } });
+    const res = await post(body()); // sin customData
+    expect(res.status).toBe(400);
+    expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it("campos personalizados válidos → se guardan en la orden (custom_data)", async () => {
+    setup({ event: { custom_fields: [{ key: "empresa", label: "Empresa", type: "text", required: true }] } });
+    const res = await post(body({ customData: { empresa: "ACME", basura: "x" } }));
+    expect(res.status).toBe(200);
+    const order = h.db.queries.find((q) => q.table === "orders" && q.op === "insert");
+    expect(order?.payload).toMatchObject({ custom_data: { empresa: "ACME" } }); // ignora clave no definida
+  });
+
   it("sin capabilities activas: NO ofrece OXXO ni SPEI (evita romper el PI)", async () => {
     setup({ event: { organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false, oxxo_enabled: false, spei_enabled: false } } });
     await post(body());
