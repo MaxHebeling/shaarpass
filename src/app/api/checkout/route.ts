@@ -6,6 +6,7 @@ import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
 import { paymentMethodsFor, paymentMethodOptions, requiresCustomer } from "@/lib/stripe/paymentMethods";
 import { validatePromo } from "@/lib/ticketing/promo";
+import { parseCustomFields, validateCustomData } from "@/lib/ticketing/customFields";
 import { isEdgeQueue, edgeAdmitted } from "@/lib/queue/edge";
 import { rateLimit, clientIp, retryAfterHeaders } from "@/lib/rateLimit";
 
@@ -33,6 +34,7 @@ const Body = z.object({
   services: z.array(z.object({ serviceId: z.string().uuid(), quantity: z.number().int().min(1).max(50) })).optional(),
   queueToken: z.string().optional(),
   presaleCode: z.string().optional(),
+  customData: z.record(z.string(), z.string().max(500)).optional(), // respuestas a campos personalizados
 });
 
 export async function POST(req: Request) {
@@ -40,7 +42,7 @@ export async function POST(req: Request) {
   if (!parsed.success) {
     return NextResponse.json({ error: "payload inválido" }, { status: 400 });
   }
-  const { eventId, buyerEmail, buyerFirstName, buyerLastName, buyerCity, buyerCountry, buyerPhone, sessionId, idempotencyKey, promoCode, items, services, queueToken, presaleCode } = parsed.data;
+  const { eventId, buyerEmail, buyerFirstName, buyerLastName, buyerCity, buyerCountry, buyerPhone, sessionId, idempotencyKey, promoCode, items, services, queueToken, presaleCode, customData } = parsed.data;
   const buyerName = `${buyerFirstName} ${buyerLastName}`.trim();
   const db = createAdminClient();
 
@@ -66,7 +68,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees, oxxo_enabled, spei_enabled)")
+    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, custom_fields, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees, oxxo_enabled, spei_enabled)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -88,6 +90,12 @@ export async function POST(req: Request) {
     if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
   const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean; absorb_fees: boolean; oxxo_enabled: boolean; spei_enabled: boolean };
+
+  // Campos de registro personalizados del evento (compatible: sin campos = sin efecto).
+  const customFields = parseCustomFields(event.custom_fields);
+  const customCheck = validateCustomData(customFields, customData);
+  if (!customCheck.ok) return NextResponse.json({ error: customCheck.error }, { status: 400 });
+  const customClean = customCheck.clean;
 
   // Precios autoritativos desde la BD (nunca confíes en el cliente).
   const ids = items.map((i) => i.ticketTypeId);
@@ -204,6 +212,7 @@ export async function POST(req: Request) {
       promo_code_id: promoId,
       platform_fee_cents: fees.applicationFeeCents, // lo que realmente cobra la plataforma
       total_cents: orderTotal,
+      custom_data: customClean,
       currency: event.currency,
       idempotency_key: idempotencyKey,
     })

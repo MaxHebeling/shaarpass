@@ -5,7 +5,19 @@ import { revalidatePath } from "next/cache";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { countRecipients, processNotificationJob, type FieldChange, type ChangePayload } from "@/lib/notifications/eventChange";
+import { parseCustomFields } from "@/lib/ticketing/customFields";
 import type { Segment } from "@/lib/email/campaignSend";
+
+/** Guarda la definición de campos de registro personalizados de un evento.
+ *  RLS (event_org_write) garantiza que solo un miembro de la org pueda editarlo. */
+export async function updateEventCustomFields(eventId: string, fields: unknown): Promise<{ ok?: true; error?: string }> {
+  const db = await createClient();
+  const clean = parseCustomFields(fields);
+  const { error } = await db.from("events").update({ custom_fields: clean }).eq("id", eventId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${eventId}`);
+  return { ok: true };
+}
 
 function slugify(s: string) {
   return s

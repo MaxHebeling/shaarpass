@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { parseCustomFields } from "@/lib/ticketing/customFields";
 
 export const runtime = "nodejs";
 
@@ -18,6 +19,7 @@ interface TicketRow {
   orders: {
     buyer_name: string | null; buyer_email: string | null; buyer_phone: string | null;
     buyer_city: string | null; buyer_country: string | null; paid_at: string | null; payment_method: string | null;
+    custom_data: Record<string, string> | null;
   } | null;
 }
 
@@ -32,8 +34,9 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   if (!user) return NextResponse.json({ error: "No autenticado" }, { status: 401 });
 
   const admin = createAdminClient();
-  const { data: event } = await admin.from("events").select("id, slug, org_id").eq("id", id).maybeSingle();
+  const { data: event } = await admin.from("events").select("id, slug, org_id, custom_fields").eq("id", id).maybeSingle();
   if (!event) return NextResponse.json({ error: "Evento no encontrado" }, { status: 404 });
+  const customFields = parseCustomFields(event.custom_fields);
   const { data: member } = await admin
     .from("org_members").select("user_id").eq("org_id", event.org_id).eq("user_id", user.id).maybeSingle();
   if (!member) return NextResponse.json({ error: "No autorizado" }, { status: 403 });
@@ -41,12 +44,12 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
   // Una fila por boleto emitido (asistente). Datos del asistente si existen, si no del comprador.
   const { data: ticketData } = await admin
     .from("tickets")
-    .select("status, checked_in_at, ticket_types(name), attendees(first_name, last_name, email), orders(buyer_name, buyer_email, buyer_phone, buyer_city, buyer_country, paid_at, payment_method)")
+    .select("status, checked_in_at, ticket_types(name), attendees(first_name, last_name, email), orders(buyer_name, buyer_email, buyer_phone, buyer_city, buyer_country, paid_at, payment_method, custom_data)")
     .eq("event_id", id)
     .in("status", ["valid", "checked_in"]);
   const tickets = (ticketData ?? []) as unknown as TicketRow[];
 
-  const header = ["Nombre", "Correo", "Teléfono", "Ciudad", "País", "Tipo de boleto", "Estado", "Check-in", "Fecha de compra", "Método de pago"];
+  const header = ["Nombre", "Correo", "Teléfono", "Ciudad", "País", "Tipo de boleto", "Estado", "Check-in", "Fecha de compra", "Método de pago", ...customFields.map((f) => f.label)];
   const rows = tickets.map((t) => {
     const a = t.attendees;
     const o = t.orders;
@@ -55,7 +58,8 @@ export async function GET(_req: Request, { params }: { params: Promise<{ id: str
     const estado = t.status === "checked_in" ? "Registrado" : "Válido";
     const checkin = t.checked_in_at ? new Date(t.checked_in_at).toLocaleString("es-MX") : "";
     const compra = o?.paid_at ? new Date(o.paid_at).toLocaleString("es-MX") : "";
-    return [nombre, correo, o?.buyer_phone ?? "", o?.buyer_city ?? "", o?.buyer_country ?? "", t.ticket_types?.name ?? "", estado, checkin, compra, o?.payment_method ?? ""];
+    const cd = o?.custom_data ?? {};
+    return [nombre, correo, o?.buyer_phone ?? "", o?.buyer_city ?? "", o?.buyer_country ?? "", t.ticket_types?.name ?? "", estado, checkin, compra, o?.payment_method ?? "", ...customFields.map((f) => cd[f.key] ?? "")];
   });
 
   // BOM para que Excel abra los acentos correctamente.
