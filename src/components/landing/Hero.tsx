@@ -1,7 +1,7 @@
 "use client";
 
 import Image from "next/image";
-import { motion } from "motion/react";
+import { motion, useMotionValue, useSpring, useTransform, useReducedMotion } from "motion/react";
 import { ArrowRight, Sparkles, Zap, ShieldCheck, QrCode, CheckCircle2 } from "lucide-react";
 
 const fadeUp = {
@@ -14,8 +14,27 @@ const fadeUp = {
 };
 
 export function Hero() {
+  // Parallax cinematográfico del boleto según el mouse (solo desktop; off en reduced-motion).
+  const reduce = useReducedMotion();
+  const mx = useMotionValue(0);
+  const my = useMotionValue(0);
+  const sx = useSpring(mx, { stiffness: 120, damping: 22, mass: 0.4 });
+  const sy = useSpring(my, { stiffness: 120, damping: 22, mass: 0.4 });
+  const rotateY = useTransform(sx, [-0.5, 0.5], [8, -8]);
+  const rotateX = useTransform(sy, [-0.5, 0.5], [-8, 8]);
+  const tx = useTransform(sx, [-0.5, 0.5], [-12, 12]);
+  const ty = useTransform(sy, [-0.5, 0.5], [-12, 12]);
+
+  function onMove(e: React.MouseEvent<HTMLElement>) {
+    if (reduce) return;
+    const r = e.currentTarget.getBoundingClientRect();
+    mx.set((e.clientX - r.left) / r.width - 0.5);
+    my.set((e.clientY - r.top) / r.height - 0.5);
+  }
+  function onLeave() { mx.set(0); my.set(0); }
+
   return (
-    <section className="relative overflow-hidden px-6 pb-24 pt-36 md:pb-28 md:pt-44">
+    <section onMouseMove={onMove} onMouseLeave={onLeave} className="aurora relative overflow-hidden px-6 pb-24 pt-36 md:pb-28 md:pt-44">
       {/* Imagen de fondo full-bleed */}
       <Image src="/hero.jpg" alt="" fill priority sizes="100vw" className="object-cover object-center" />
       <div className="absolute inset-0 bg-gradient-to-b from-ink/70 via-ink/85 to-ink" />
@@ -34,7 +53,8 @@ export function Hero() {
 
           <motion.h1
             variants={fadeUp} custom={1} initial="hidden" animate="show"
-            className="font-display text-5xl font-bold leading-[1.04] tracking-tight md:text-6xl xl:text-7xl"
+            style={{ fontSize: "clamp(2.9rem, 7.2vw, 5.75rem)" }}
+            className="font-display font-bold leading-[0.98] tracking-tight"
           >
             Te quedas con <span className="brand-text text-glow">más dinero</span>
             <br className="hidden sm:block" /> de cada boleto.
@@ -77,14 +97,17 @@ export function Hero() {
           </motion.div>
         </div>
 
-        {/* Columna del mockup de boleto */}
+        {/* Columna del mockup de boleto (entrada + parallax con el mouse) */}
         <motion.div
           initial={{ opacity: 0, y: 40, rotate: -3 }}
           animate={{ opacity: 1, y: 0, rotate: 0 }}
           transition={{ delay: 0.35, duration: 0.9, ease: [0.22, 1, 0.36, 1] }}
           className="relative mx-auto hidden w-full max-w-sm lg:block"
+          style={{ perspective: 1000 }}
         >
-          <TicketMock />
+          <motion.div style={{ rotateX, rotateY, x: tx, y: ty, transformStyle: "preserve-3d" }} className="will-change-transform">
+            <TicketMock />
+          </motion.div>
         </motion.div>
       </div>
     </section>

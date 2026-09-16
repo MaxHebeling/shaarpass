@@ -10,6 +10,7 @@ import { faqs } from "@/components/landing/faq-data";
 import { LeadCapture } from "@/components/landing/LeadCapture";
 import { FinalCTA } from "@/components/landing/FinalCTA";
 import { Footer } from "@/components/landing/Footer";
+import { Reveal } from "@/components/landing/Reveal";
 import type { Metadata } from "next";
 
 export const metadata: Metadata = { alternates: { canonical: "/" } };
@@ -54,18 +55,18 @@ export default function Home() {
       <Nav />
       <Hero />
       <MarketBand />
-      <UseCases />
-      <FeeComparator />
+      <Reveal><UseCases /></Reveal>
+      <Reveal><FeeComparator /></Reveal>
       <div className="relative">
         <div className="grid-bg absolute inset-0" />
         <div className="relative">
-          <ValueProps />
-          <HowItWorks />
+          <Reveal><ValueProps /></Reveal>
+          <Reveal><HowItWorks /></Reveal>
         </div>
       </div>
-      <FAQ />
-      <LeadCapture />
-      <FinalCTA />
+      <Reveal><FAQ /></Reveal>
+      <Reveal><LeadCapture /></Reveal>
+      <Reveal><FinalCTA /></Reveal>
       <Footer />
     </main>
   );
