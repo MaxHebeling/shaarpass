@@ -7,6 +7,8 @@ export interface UserOrg {
   charges_enabled: boolean;   // puede VENDER (cargo directo cae en su cuenta)
   payouts_enabled: boolean;   // totalmente habilitado / ya recibe depósitos al banco
   absorb_fees: boolean;       // el organizador absorbe las comisiones (comprador paga precio de lista)
+  payment_gateway: string;    // 'stripe' | 'mercadopago'
+  mp_connected: boolean;      // Mercado Pago conectado (OAuth)
 }
 
 /** Devuelve la organización del usuario autenticado (la primera donde es miembro). */
@@ -16,7 +18,7 @@ export async function getUserOrg(db: SupabaseClient): Promise<UserOrg | null> {
 
   const { data } = await db
     .from("org_members")
-    .select("organizations(id, name, stripe_account_id, charges_enabled, payouts_enabled, absorb_fees)")
+    .select("organizations(id, name, stripe_account_id, charges_enabled, payouts_enabled, absorb_fees, payment_gateway, mp_connected)")
     .eq("user_id", user.id)
     .limit(1)
     .maybeSingle();

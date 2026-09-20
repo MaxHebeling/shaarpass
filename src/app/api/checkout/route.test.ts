@@ -15,11 +15,17 @@ const h = vi.hoisted(() => ({
   db: null as unknown as FakeDb,
   paymentIntentsCreate: null as unknown as ReturnType<typeof vi.fn>,
   customersCreate: null as unknown as ReturnType<typeof vi.fn>,
+  mpSellerToken: "APP_USR-seller" as string | null,
+  mpCreatePref: null as unknown as ReturnType<typeof vi.fn>,
 }));
 
 vi.mock("@/lib/supabase/admin", () => ({ createAdminClient: () => h.db }));
 vi.mock("@/lib/stripe/client", () => ({
   getStripe: () => ({ paymentIntents: { create: h.paymentIntentsCreate }, customers: { create: h.customersCreate } }),
+}));
+vi.mock("@/lib/mp/client", () => ({
+  getSellerToken: async () => h.mpSellerToken,
+  createPreference: (...a: unknown[]) => (h.mpCreatePref as unknown as (...x: unknown[]) => unknown)(...a),
 }));
 vi.mock("@/lib/email/tickets", () => ({ sendTicketEmail: vi.fn(async () => undefined) }));
 vi.mock("@/lib/email/campaignSend", () => ({ sendWelcome: vi.fn(async () => undefined) }));
@@ -61,7 +67,7 @@ function setup(o: Overrides = {}) {
     max_tickets_per_buyer: null,
     presale_enabled: false,
     presale_ends_at: null,
-    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false, oxxo_enabled: true, spei_enabled: false },
+    organizations: { stripe_account_id: "acct_org_123", charges_enabled: true, payouts_enabled: true, absorb_fees: false, oxxo_enabled: true, spei_enabled: false, payment_gateway: "stripe", mp_connected: false },
     ...o.event,
   };
   const price = o.priceCents ?? PRICE_CENTS;
@@ -99,6 +105,8 @@ function setup(o: Overrides = {}) {
 
   h.paymentIntentsCreate = vi.fn(async () => ({ id: "pi_test_123", client_secret: "pi_test_123_secret" }));
   h.customersCreate = vi.fn(async () => ({ id: "cus_test_123" }));
+  h.mpSellerToken = "APP_USR-seller";
+  h.mpCreatePref = vi.fn(async () => ({ id: "pref_1", initPoint: "https://mp/checkout/pref_1" }));
 }
 
 function body(extra: Record<string, unknown> = {}) {
@@ -278,6 +286,25 @@ describe("checkout — el cobro cuadra", () => {
     expect(res.status).toBe(200);
     const order = h.db.queries.find((q) => q.table === "orders" && q.op === "insert");
     expect(order?.payload).toMatchObject({ custom_data: { empresa: "ACME" } }); // ignora clave no definida
+  });
+
+  it("Mercado Pago: crea preferencia con marketplace_fee = margen y devuelve init_point", async () => {
+    setup({ event: { organizations: { stripe_account_id: null, charges_enabled: false, payouts_enabled: false, absorb_fees: false, oxxo_enabled: false, spei_enabled: false, payment_gateway: "mercadopago", mp_connected: true } } });
+    const res = await post(body());
+    expect(res.status).toBe(200);
+    await expect(res.json()).resolves.toMatchObject({ mpInitPoint: "https://mp/checkout/pref_1" });
+    expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
+    const expected = computeFees(PRICE_CENTS * QTY, QTY, "mxn", 0);
+    const [arg] = h.mpCreatePref.mock.calls[0];
+    expect(arg.marketplaceFee).toBeCloseTo(expected.marginCents / 100, 2);
+    expect(arg.externalReference).toBe(ORDER_ID);
+  });
+
+  it("Mercado Pago elegido pero NO conectado → 409 sin cobrar", async () => {
+    setup({ event: { organizations: { stripe_account_id: null, charges_enabled: false, payouts_enabled: false, absorb_fees: false, oxxo_enabled: false, spei_enabled: false, payment_gateway: "mercadopago", mp_connected: false } } });
+    const res = await post(body());
+    expect(res.status).toBe(409);
+    expect(h.mpCreatePref).not.toHaveBeenCalled();
   });
 
   it("sin capabilities activas: NO ofrece OXXO ni SPEI (evita romper el PI)", async () => {
