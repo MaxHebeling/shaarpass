@@ -13,7 +13,7 @@
  * ellas (`db.queries`, `db.rpcCalls`).
  */
 
-export type QueryOp = "select" | "insert" | "update" | "delete";
+export type QueryOp = "select" | "insert" | "update" | "delete" | "upsert";
 
 export interface QueryContext {
   table: string;
@@ -120,6 +120,11 @@ export function createFakeDb(opts: { tables?: TableResolver; rpc?: RpcResolver }
       };
       withOps.delete = () => {
         base.ctx.op = "delete";
+        return base;
+      };
+      withOps.upsert = (rows: unknown) => {
+        base.ctx.op = "upsert";
+        base.ctx.payload = rows;
         return base;
       };
       return base;
