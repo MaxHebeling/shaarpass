@@ -68,7 +68,7 @@ export async function POST(req: Request) {
   // Trae evento + org (necesitamos la cuenta Connect para el destination charge).
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, custom_fields, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees, oxxo_enabled, spei_enabled)")
+    .select("id, org_id, slug, title, currency, status, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, presale_enabled, presale_ends_at, custom_fields, organizations(stripe_account_id, charges_enabled, payouts_enabled, absorb_fees, oxxo_enabled, spei_enabled, payment_gateway, mp_connected)")
     .eq("id", eventId)
     .single();
   if (!event || event.status !== "published") {
@@ -89,7 +89,8 @@ export async function POST(req: Request) {
     const { data: ok } = await db.rpc("validate_presale_code", { p_event: eventId, p_code: presaleCode ?? "" });
     if (!ok) return NextResponse.json({ error: "Este evento está en presale: necesitas un código de acceso válido." }, { status: 403 });
   }
-  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean; absorb_fees: boolean; oxxo_enabled: boolean; spei_enabled: boolean };
+  const org = event.organizations as unknown as { stripe_account_id: string | null; charges_enabled: boolean; payouts_enabled: boolean; absorb_fees: boolean; oxxo_enabled: boolean; spei_enabled: boolean; payment_gateway: string; mp_connected: boolean };
+  const isMP = org?.payment_gateway === "mercadopago";
 
   // Campos de registro personalizados del evento (compatible: sin campos = sin efecto).
   const customFields = parseCustomFields(event.custom_fields);
@@ -187,12 +188,15 @@ export async function POST(req: Request) {
   const orderTotal = fees.totalCents;
   const isFree = orderTotal <= 0;
 
-  // Los pagos solo se exigen si HAY que cobrar. Los eventos gratis no necesitan Stripe.
-  // Cargo DIRECTO: basta con charges_enabled (el dinero cae en la cuenta del
-  // organizador); payouts_enabled solo define cuándo Stripe le deposita al banco,
-  // así que no debe bloquear la venta mientras Stripe verifica la cuenta.
-  if (!isFree && (!org?.stripe_account_id || !org.charges_enabled)) {
-    return NextResponse.json({ error: "organizador sin pagos habilitados" }, { status: 409 });
+  // Los pagos solo se exigen si HAY que cobrar. Los eventos gratis no necesitan pasarela.
+  // Mercado Pago: basta con la cuenta MP conectada. Stripe (cargo directo): basta
+  // charges_enabled (el dinero cae en la cuenta del organizador).
+  if (!isFree) {
+    if (isMP) {
+      if (!org?.mp_connected) return NextResponse.json({ error: "organizador sin Mercado Pago conectado" }, { status: 409 });
+    } else if (!org?.stripe_account_id || !org.charges_enabled) {
+      return NextResponse.json({ error: "organizador sin pagos habilitados" }, { status: 409 });
+    }
   }
 
   // 3) Crea la orden (pending) + items.
@@ -281,6 +285,34 @@ export async function POST(req: Request) {
       await sendWelcome(db, eventId, { email: buyerEmail, name: buyerName, country: buyerCountry });
     } catch { /* best-effort */ }
     return NextResponse.json({ free: true, orderId: order.id });
+  }
+
+  // 4-MP) Mercado Pago (marketplace): crea una preferencia de Checkout Pro con
+  //    split. El dinero cae DIRECTO en la cuenta MP del organizador; marketplace_fee
+  //    = nuestra comisión. Los boletos se emiten vía webhook al aprobarse el pago.
+  if (isMP) {
+    const { getSellerToken, createPreference } = await import("@/lib/mp/client");
+    const sellerToken = await getSellerToken(event.org_id);
+    if (!sellerToken) {
+      await db.from("orders").update({ status: "failed" }).eq("id", order.id);
+      return NextResponse.json({ error: "El organizador aún no puede recibir pagos (Mercado Pago)" }, { status: 409 });
+    }
+    const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
+    const pref = await createPreference({
+      sellerToken,
+      items: [{ title: `Boletos — ${(event as { title?: string }).title ?? "evento"}`, quantity: 1, unit_price: orderTotal / 100 }],
+      marketplaceFee: fees.applicationFeeCents / 100,
+      payerEmail: buyerEmail,
+      externalReference: order.id,
+      notificationUrl: `${base}/api/mp/webhook?org=${event.org_id}`,
+      backUrl: `${base}/e/${(event as { slug?: string }).slug ?? ""}/gracias`,
+      metadata: { order_id: order.id, event_id: eventId },
+    });
+    if ("error" in pref) {
+      await db.from("orders").update({ status: "failed" }).eq("id", order.id);
+      return NextResponse.json({ error: pref.error }, { status: 502 });
+    }
+    return NextResponse.json({ orderId: order.id, mpInitPoint: pref.initPoint });
   }
 
   // 4) PaymentIntent con CARGO DIRECTO sobre la cuenta Connect del organizador:

@@ -135,6 +135,8 @@ export default function CheckoutPage() {
       if (!res.ok) throw new Error(data.detail || data.error || "No se pudo iniciar el pago");
       // Evento gratis: ya se emitieron los boletos, sin pago → directo a gracias.
       if (data.free) { sessionStorage.removeItem(`cart:${slug}`); router.push(`/e/${slug}/gracias`); return; }
+      // Mercado Pago: redirige al checkout hospedado por MP (tarjeta/OXXO/SPEI/MSI).
+      if (data.mpInitPoint) { sessionStorage.removeItem(`cart:${slug}`); window.location.href = data.mpInitPoint; return; }
       if (!data.clientSecret) throw new Error("Falta configurar Stripe (claves de pago).");
       // Cargo directo: Stripe.js debe inicializarse sobre la cuenta del organizador.
       setConnectedAccountId(data.connectedAccountId);

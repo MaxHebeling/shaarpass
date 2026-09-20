@@ -4,6 +4,7 @@ import { createClient } from "@/lib/supabase/server";
 import { getUserOrg } from "@/lib/org";
 import { ConnectButton } from "@/components/dashboard/ConnectButton";
 import { FeeModeToggle } from "@/components/dashboard/FeeModeToggle";
+import { GatewaySelector } from "@/components/dashboard/GatewaySelector";
 
 export const dynamic = "force-dynamic";
 
@@ -47,12 +48,18 @@ export default async function PagosPage() {
   const canSell = Boolean(org?.charges_enabled);   // ya puede vender (cargo directo)
   // Puede vender pero Stripe aún verifica los depósitos: NO es un bloqueo.
   const sellingWhileVerifying = canSell && !enabled;
+  const usingMP = org.payment_gateway === "mercadopago";
 
   return (
     <div className="mx-auto max-w-2xl">
       <h1 className="font-display text-3xl font-bold">Pagos</h1>
       <p className="mt-1 text-sm text-muted">Conecta tu cuenta para recibir el dinero de tus ventas.</p>
 
+      <div className="mt-8">
+        <GatewaySelector initial={org.payment_gateway} mpConnected={org.mp_connected} />
+      </div>
+
+      {!usingMP && (
       <div className="glass mt-8 rounded-3xl p-7">
         <div className="flex items-start gap-4">
           <span className={`grid h-12 w-12 shrink-0 place-items-center rounded-2xl ${enabled || sellingWhileVerifying ? "bg-emerald-500/15 text-emerald-300" : connected ? "bg-gold/15 text-gold" : "brand-gradient text-ink"}`}>
@@ -85,6 +92,7 @@ export default async function PagosPage() {
           </div>
         </div>
       </div>
+      )}
 
       <FeeModeToggle initial={org.absorb_fees} />
 
