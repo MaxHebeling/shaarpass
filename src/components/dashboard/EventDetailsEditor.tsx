@@ -14,12 +14,14 @@ export interface EventDetails {
   id: string; title: string; description: string | null; category: string | null;
   city: string | null; region: string | null; startsAt: string; endsAt: string;
   timezone: string; currency: string; isOnline: boolean; notifyOnChange: boolean;
+  venueName: string | null; venueAddress: string | null; orgName: string | null;
 }
 
 export function EventDetailsEditor({ e, days }: { e: EventDetails; days: { dayDate: string; startsAt: string; endsAt: string }[] }) {
   const [f, setF] = useState({
     title: e.title, description: e.description ?? "", category: e.category ?? "",
     city: e.city ?? "", region: e.region ?? "",
+    venueName: e.venueName ?? "", venueAddress: e.venueAddress ?? "", orgName: e.orgName ?? "",
     timezone: e.timezone || "America/Mexico_City", currency: e.currency,
     isOnline: e.isOnline, notifyOnChange: e.notifyOnChange,
   });
@@ -38,7 +40,8 @@ export function EventDetailsEditor({ e, days }: { e: EventDetails; days: { dayDa
       // 2) Resto de detalles.
       const res = await updateEventDetails({
         eventId: e.id, title: f.title, description: f.description, category: f.category,
-        venueName: "", city: f.city, region: f.region,
+        venueName: f.venueName, venueAddress: f.venueAddress, orgName: f.orgName,
+        city: f.city, region: f.region,
         timezone: f.timezone, currency: f.currency,
         isOnline: f.isOnline, notifyOnChange: f.notifyOnChange,
       });
@@ -101,6 +104,21 @@ export function EventDetailsEditor({ e, days }: { e: EventDetails; days: { dayDa
           </div>
           <div><label className={label}>Ciudad</label><input value={f.city} onChange={(e) => set("city", e.target.value)} className={field} /></div>
           <div><label className={label}>Estado</label><input value={f.region} onChange={(e) => set("region", e.target.value)} className={field} /></div>
+        </div>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <div>
+            <label className={label}>Lugar / venue</label>
+            <input value={f.venueName} onChange={(e) => set("venueName", e.target.value)} placeholder="Pabellón Cuauhtémoc" className={field} />
+          </div>
+          <div>
+            <label className={label}>Dirección del lugar</label>
+            <input value={f.venueAddress} onChange={(e) => set("venueAddress", e.target.value)} placeholder="Av. Siempre Viva 742" className={field} />
+          </div>
+        </div>
+        <div>
+          <label className={label}>Marca / organizador</label>
+          <input value={f.orgName} onChange={(e) => set("orgName", e.target.value)} placeholder="Tu organización" className={field} />
+          <p className="mt-1 text-[11px] text-muted">Es el nombre de tu organización; se muestra en la página pública (“por …”).</p>
         </div>
         <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-line bg-surface/40 px-4 py-3 text-sm">
           <input type="checkbox" checked={f.notifyOnChange} onChange={(ev) => setF((p) => ({ ...p, notifyOnChange: ev.target.checked }))}

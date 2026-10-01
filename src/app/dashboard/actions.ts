@@ -351,7 +351,7 @@ async function dispatchEventChangeNotification(opts: {
 
 export async function updateEventDetails(form: {
   eventId: string; title: string; description: string; category: string;
-  venueName: string; city: string; region: string;
+  venueName: string; venueAddress?: string; orgName?: string; city: string; region: string;
   timezone: string; currency: string;
   isOnline?: boolean; notifyOnChange?: boolean;
 }): Promise<UpdateEventResult> {
@@ -362,9 +362,9 @@ export async function updateEventDetails(form: {
   // Snapshot ANTES del cambio (para comparar campos que afectan la asistencia).
   const { data: prev } = await db
     .from("events")
-    .select("starts_at, ends_at, timezone, city, region, is_online, notify_on_change, org_id, organizations(name)")
+    .select("starts_at, ends_at, timezone, city, region, is_online, notify_on_change, org_id, venue_id, organizations(name)")
     .eq("id", form.eventId)
-    .maybeSingle<{ starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; is_online: boolean; notify_on_change: boolean; org_id: string; organizations: { name: string } | { name: string }[] | null }>();
+    .maybeSingle<{ starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; is_online: boolean; notify_on_change: boolean; org_id: string; venue_id: string | null; organizations: { name: string } | { name: string }[] | null }>();
 
   const newCity = form.city?.trim() || null;
   const newRegion = form.region?.trim() || null;
@@ -388,6 +388,25 @@ export async function updateEventDetails(form: {
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/eventos/${form.eventId}`);
   if (!prev) return { ok: true };
+
+  // Lugar / venue (nombre + dirección): actualiza el venue vinculado o crea uno.
+  const venueName = form.venueName?.trim();
+  const venueAddress = form.venueAddress?.trim() || null;
+  if (venueName) {
+    if (prev.venue_id) {
+      await db.from("venues").update({ name: venueName, address: venueAddress, city: newCity }).eq("id", prev.venue_id);
+    } else {
+      const { data: v } = await db.from("venues").insert({ org_id: prev.org_id, name: venueName, address: venueAddress, city: newCity }).select("id").single();
+      if (v?.id) await db.from("events").update({ venue_id: v.id }).eq("id", form.eventId);
+    }
+  }
+
+  // Marca / organizador: renombra la organización (requiere owner/admin por RLS).
+  const curOrgName = Array.isArray(prev.organizations) ? prev.organizations[0]?.name : prev.organizations?.name;
+  const newOrgName = form.orgName?.trim();
+  if (newOrgName && newOrgName !== curOrgName) {
+    await db.from("organizations").update({ name: newOrgName }).eq("id", prev.org_id);
+  }
 
   // --- Detección de cambios de UBICACIÓN/MODALIDAD que afectan la asistencia ---
   // (La fecha/horario se notifican en setEventDays, que conoce el antes/después de los días.)
@@ -536,6 +555,65 @@ export async function setEventDays(form: { eventId: string; days: EventDayInput[
     newDate, newTime, newLocation: locOf(prev.is_online, prev.city, prev.region),
   });
   return { ok: true, notify };
+}
+
+/**
+ * Publica o despublica un evento. Al publicar valida: ≥1 día de horario, ≥1 tipo de
+ * boleto con precio y fases válidas, y cuenta de cobro conectada (salvo evento gratis).
+ */
+export async function setEventStatus(form: { eventId: string; publish: boolean }): Promise<{ ok?: true; error?: string }> {
+  const db = await createClient();
+
+  if (!form.publish) {
+    const { error } = await db.from("events").update({ status: "draft" }).eq("id", form.eventId);
+    if (error) return { error: error.message };
+    revalidatePath(`/dashboard/eventos/${form.eventId}`);
+    revalidatePath("/dashboard");
+    return { ok: true };
+  }
+
+  // 1) Al menos un día de horario.
+  const { count: dayCount } = await db.from("event_days").select("id", { count: "exact", head: true }).eq("event_id", form.eventId);
+  if (!dayCount) return { error: "Agrega al menos un día de horario antes de publicar." };
+
+  // 2) Al menos un tipo de boleto con precio y fases válidas.
+  const { data: types } = await db.from("ticket_types").select("id, price_cents").eq("event_id", form.eventId);
+  if (!types?.length) return { error: "Agrega al menos un tipo de boleto antes de publicar." };
+  const typeIds = types.map((t) => t.id);
+  const { data: phaseRows } = await db.from("ticket_price_phases").select("ticket_type_id, kind, price_cents, starts_at, ends_at").in("ticket_type_id", typeIds);
+  const byType = new Map<string, PhaseInput[]>();
+  for (const r of phaseRows ?? []) {
+    const a = byType.get(r.ticket_type_id) ?? [];
+    a.push({ kind: r.kind as "presale" | "sale", priceCents: r.price_cents, startsAt: r.starts_at, endsAt: r.ends_at });
+    byType.set(r.ticket_type_id, a);
+  }
+  let anyValid = false;
+  let maxPrice = 0;
+  for (const t of types) {
+    const ph = byType.get(t.id) ?? [{ kind: "sale" as const, priceCents: t.price_cents, startsAt: null, endsAt: null }];
+    const { errors } = validatePhases(ph);
+    maxPrice = Math.max(maxPrice, ...ph.map((p) => p.priceCents), 0);
+    if (!errors.length) anyValid = true;
+  }
+  if (!anyValid) return { error: "Revisa precios y fechas de tus boletos: hay fases inválidas." };
+
+  // 3) Cuenta de cobro conectada (salvo evento 100% gratis).
+  if (maxPrice > 0) {
+    const { data: ev } = await db
+      .from("events")
+      .select("organizations(payment_gateway, mp_connected, charges_enabled)")
+      .eq("id", form.eventId)
+      .maybeSingle<{ organizations: { payment_gateway: string; mp_connected: boolean; charges_enabled: boolean } | { payment_gateway: string; mp_connected: boolean; charges_enabled: boolean }[] | null }>();
+    const org = Array.isArray(ev?.organizations) ? ev?.organizations[0] : ev?.organizations;
+    const connected = org?.payment_gateway === "mercadopago" ? org?.mp_connected : org?.charges_enabled;
+    if (!connected) return { error: "Conecta tu cuenta de cobro en “Pagos” antes de publicar." };
+  }
+
+  const { error } = await db.from("events").update({ status: "published", published_at: new Date().toISOString() }).eq("id", form.eventId);
+  if (error) return { error: error.message };
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  revalidatePath("/dashboard");
+  return { ok: true };
 }
 
 export async function setEventCover(eventId: string, coverUrl: string | null) {

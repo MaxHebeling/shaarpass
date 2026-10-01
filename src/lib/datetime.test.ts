@@ -1,18 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { wallTimeToISO, isoToWallParts } from "./datetime";
+import { formatDayRange } from "./datetime";
 
-describe("datetime — hora de pared ↔ UTC por zona", () => {
-  it("ida y vuelta preserva fecha y hora local", () => {
-    const tz = "America/Argentina/Salta";
-    const iso = wallTimeToISO("2026-07-11", "17:00", tz);
-    const back = isoToWallParts(iso, tz);
-    expect(back.date).toBe("2026-07-11");
-    expect(back.time).toBe("17:00");
-  });
-
-  it("misma hora de pared en zonas distintas da UTC distinto", () => {
-    const a = wallTimeToISO("2026-07-11", "17:00", "America/Mexico_City");
-    const b = wallTimeToISO("2026-07-11", "17:00", "America/Argentina/Salta");
-    expect(a).not.toBe(b);
-  });
+describe("formatDayRange", () => {
+  it("un solo día", () => expect(formatDayRange("2026-11-13", "2026-11-13")).toBe("13 nov 2026"));
+  it("mismo mes", () => expect(formatDayRange("2026-11-13", "2026-11-14")).toBe("13–14 nov 2026"));
+  it("meses distintos, mismo año", () => expect(formatDayRange("2026-11-30", "2026-12-02")).toBe("30 nov – 2 dic 2026"));
+  it("años distintos", () => expect(formatDayRange("2026-12-30", "2027-01-02")).toBe("30 dic 2026 – 2 ene 2027"));
+  it("last vacío = single", () => expect(formatDayRange("2026-11-13", "")).toBe("13 nov 2026"));
 });

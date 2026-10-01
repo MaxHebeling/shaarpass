@@ -2,6 +2,8 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowLeft, ExternalLink, BarChart3, Pencil, Ticket as TicketIcon, ShoppingBag, DoorOpen, Map as MapIcon, Megaphone, Download } from "lucide-react";
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
+import { PublishToggle } from "@/components/dashboard/PublishToggle";
+import { formatDayRange } from "@/lib/datetime";
 import { createClient } from "@/lib/supabase/server";
 import { PromoManager, type PromoRow } from "@/components/dashboard/PromoManager";
 import { OrdersPanel, type OrderRow } from "@/components/dashboard/OrdersPanel";
@@ -31,9 +33,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
 
   const { data: event } = await db
     .from("events")
-    .select("id, org_id, slug, title, description, category, status, currency, starts_at, ends_at, timezone, city, region, cover_image, is_online, notify_on_change, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at, custom_fields")
+    .select("id, org_id, slug, title, description, category, status, currency, starts_at, ends_at, timezone, city, region, cover_image, is_online, notify_on_change, queue_enabled, onsale_at, queue_wave_size, max_tickets_per_buyer, safetix_enabled, presale_enabled, presale_ends_at, custom_fields, venue_id, venues(name, address), organizations(name)")
     .eq("id", id)
-    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; description: string | null; category: string | null; status: string; currency: string; starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; cover_image: string | null; is_online: boolean; notify_on_change: boolean; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null; custom_fields: unknown }>();
+    .maybeSingle<{ id: string; org_id: string; slug: string; title: string; description: string | null; category: string | null; status: string; currency: string; starts_at: string; ends_at: string; timezone: string; city: string | null; region: string | null; cover_image: string | null; is_online: boolean; notify_on_change: boolean; queue_enabled: boolean; onsale_at: string | null; queue_wave_size: number; max_tickets_per_buyer: number | null; safetix_enabled: boolean; presale_enabled: boolean; presale_ends_at: string | null; custom_fields: unknown; venue_id: string | null; venues: { name: string | null; address: string | null } | { name: string | null; address: string | null }[] | null; organizations: { name: string | null } | { name: string | null }[] | null }>();
   if (!event) notFound();
 
   const { data: types } = await db
@@ -202,6 +204,15 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
   };
   const statusLabel: Record<string, string> = { published: "Publicado", draft: "Borrador", cancelled: "Cancelado", ended: "Finalizado" };
 
+  // Rango de fechas a partir del horario por día (ej. "13–14 nov 2026").
+  const dateRange = eventDays.length
+    ? formatDayRange(eventDays[0].dayDate, eventDays[eventDays.length - 1].dayDate)
+    : new Date(event.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
+
+  // Venue y marca (para precargar el editor de Detalles).
+  const venue = Array.isArray(event.venues) ? event.venues[0] : event.venues;
+  const org = Array.isArray(event.organizations) ? event.organizations[0] : event.organizations;
+
   return (
     <div className="mx-auto max-w-5xl">
       <Link href="/dashboard" className="mb-4 flex items-center gap-2 text-sm text-muted transition hover:text-fg">
@@ -216,15 +227,16 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
               {statusLabel[event.status] ?? event.status}
             </span>
           </div>
-          <p className="mt-1 text-sm text-muted">
-            {new Date(event.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" })}
-          </p>
+          <p className="mt-1 text-sm text-muted">{dateRange}</p>
         </div>
-        {event.status === "published" && (
-          <Link href={`/e/${event.slug}`} target="_blank" className="glass flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm transition hover:border-white/20">
-            Ver página <ExternalLink className="h-3.5 w-3.5" />
-          </Link>
-        )}
+        <div className="flex shrink-0 items-start gap-2">
+          {event.status === "published" && (
+            <Link href={`/e/${event.slug}`} target="_blank" className="glass flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm transition hover:border-white/20">
+              Ver página <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          )}
+          <PublishToggle eventId={id} status={event.status} />
+        </div>
       </div>
 
       <DashboardTabs
@@ -252,6 +264,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
                   id: event.id, title: event.title, description: event.description, category: event.category,
                   city: event.city, region: event.region, startsAt: event.starts_at, endsAt: event.ends_at,
                   timezone: event.timezone, currency: event.currency, isOnline: event.is_online, notifyOnChange: event.notify_on_change,
+                  venueName: venue?.name ?? null, venueAddress: venue?.address ?? null, orgName: org?.name ?? null,
                 }} />
                 <EventCover eventId={id} initial={event.cover_image} />
                 <CustomFieldsEditor eventId={id} initial={parseCustomFields(event.custom_fields)} />
