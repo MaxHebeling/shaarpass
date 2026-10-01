@@ -41,3 +41,17 @@ export const EVENT_TIMEZONES: { value: string; label: string }[] = [
   { value: "America/New_York", label: "EE.UU. — Este" },
   { value: "Europe/Madrid", label: "España" },
 ];
+
+/** Rango de fechas legible a partir de dos fechas "YYYY-MM-DD" (día local del evento).
+ *  Ej.: "13 nov 2026" · "13–14 nov 2026" · "30 nov – 2 dic 2026" · "30 dic 2026 – 2 ene 2027". */
+const MESES_ABR = ["ene", "feb", "mar", "abr", "may", "jun", "jul", "ago", "sep", "oct", "nov", "dic"];
+export function formatDayRange(first: string, last: string): string {
+  if (!first) return "";
+  const [fy, fm, fd] = first.split("-").map(Number);
+  const l = last || first;
+  const [ly, lm, ld] = l.split("-").map(Number);
+  if (first === l) return `${fd} ${MESES_ABR[fm - 1]} ${fy}`;
+  if (fy === ly && fm === lm) return `${fd}–${ld} ${MESES_ABR[fm - 1]} ${fy}`;
+  if (fy === ly) return `${fd} ${MESES_ABR[fm - 1]} – ${ld} ${MESES_ABR[lm - 1]} ${fy}`;
+  return `${fd} ${MESES_ABR[fm - 1]} ${fy} – ${ld} ${MESES_ABR[lm - 1]} ${ly}`;
+}

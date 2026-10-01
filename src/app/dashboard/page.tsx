@@ -2,6 +2,7 @@ import Link from "next/link";
 import { Plus, ExternalLink, Calendar, TrendingUp, Ticket as TicketIcon, AlertTriangle } from "lucide-react";
 import { createClient } from "@/lib/supabase/server";
 import { money } from "@/lib/money";
+import { formatDayRange } from "@/lib/datetime";
 import { OnboardingChecklist } from "@/components/dashboard/OnboardingChecklist";
 
 export const dynamic = "force-dynamic";
@@ -46,6 +47,7 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
   const ids = (events ?? []).map((e) => e.id);
   let revenueByEvent: Record<string, number> = {};
   let ticketsByEvent: Record<string, number> = {};
+  const dateRangeByEvent: Record<string, { first: string; last: string }> = {};
   if (ids.length) {
     const { data: orders } = await db
       .from("orders")
@@ -59,6 +61,15 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
       .select("event_id, quantity_sold")
       .in("event_id", ids);
     for (const t of tts ?? []) ticketsByEvent[t.event_id] = (ticketsByEvent[t.event_id] ?? 0) + t.quantity_sold;
+
+    // Rango de fechas por evento (del horario por día): primer y último día.
+    const { data: dayRows } = await db.from("event_days").select("event_id, day_date").in("event_id", ids);
+    for (const d of dayRows ?? []) {
+      const date = d.day_date as string;
+      const cur = dateRangeByEvent[d.event_id];
+      if (!cur) dateRangeByEvent[d.event_id] = { first: date, last: date };
+      else { if (date < cur.first) cur.first = date; if (date > cur.last) cur.last = date; }
+    }
   }
 
   const totalRevenue = Object.values(revenueByEvent).reduce((a, b) => a + b, 0);
@@ -173,7 +184,9 @@ export default async function DashboardPage({ searchParams }: { searchParams: Pr
                 <div className="p-4">
                   <h3 className="truncate font-medium">{e.title}</h3>
                   <p className="mt-0.5 text-xs text-muted">
-                    {new Date(e.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
+                    {dateRangeByEvent[e.id]
+                      ? formatDayRange(dateRangeByEvent[e.id].first, dateRangeByEvent[e.id].last)
+                      : new Date(e.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "short", year: "numeric" })}
                   </p>
                   <div className="mt-3 flex items-center gap-3 text-sm">
                     <span className="font-display font-bold text-gold">{money(revenueByEvent[e.id] ?? 0, e.currency)}</span>
