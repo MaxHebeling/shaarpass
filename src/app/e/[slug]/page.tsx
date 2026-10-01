@@ -244,10 +244,16 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     <main className="relative min-h-screen pb-20">
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }} />
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(breadcrumbJsonLd) }} />
-      {/* Cover */}
-      <div className="relative h-[42vh] min-h-[320px] w-full overflow-hidden md:h-[52vh]">
+      {/* Cover — se muestra COMPLETA (object-contain), sin recortar, sobre un fondo
+          difuminado de la misma imagen que rellena el espacio (look premium). */}
+      <div className="relative h-[52vh] min-h-[360px] w-full overflow-hidden md:h-[56vh]">
         {event.cover_image && (
-          <Image src={event.cover_image} alt={event.title} fill priority className="object-cover" />
+          <>
+            {/* Relleno difuminado (solo estética; no se recorta nada importante). */}
+            <Image src={event.cover_image} alt="" aria-hidden fill priority sizes="100vw" className="scale-110 object-cover opacity-45 blur-2xl" />
+            {/* Portada completa, centrada. */}
+            <Image src={event.cover_image} alt={event.title} fill priority sizes="100vw" className="object-contain" />
+          </>
         )}
         <div className="absolute inset-0 bg-gradient-to-t from-ink via-ink/70 to-ink/20" />
         {soldOut && (
