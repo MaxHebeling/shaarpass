@@ -1,13 +1,37 @@
 "use client";
 
-import { useState } from "react";
-import { Copy, Check, MessageCircle, Share2, ExternalLink } from "lucide-react";
+import { useState, useEffect } from "react";
+import { Copy, Check, MessageCircle, Share2, ExternalLink, Download, QrCode } from "lucide-react";
+import QRCode from "qrcode";
+
+function triggerDownload(href: string, name: string) {
+  const a = document.createElement("a");
+  a.href = href; a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
 
 /** Panel para compartir el evento publicado (distribución = la palanca de venta). */
 export function ShareEvent({ slug, title }: { slug: string; title: string }) {
   const [copied, setCopied] = useState(false);
-  const url = typeof window !== "undefined" ? `${window.location.origin}/e/${slug}` : `/e/${slug}`;
+  const [qrPng, setQrPng] = useState<string | null>(null);
+  // Origen se fija tras montar → server y cliente renderizan igual (sin hydration mismatch).
+  const [origin, setOrigin] = useState("");
+  useEffect(() => setOrigin(window.location.origin), []);
+  const url = `${origin}/e/${slug}`;
+  const ogUrl = `/e/${slug}/og`;
   const msg = `🎟️ ${title} — consigue tus boletos aquí: ${url}`;
+
+  useEffect(() => {
+    if (!origin) return;
+    QRCode.toDataURL(url, { width: 480, margin: 1, color: { dark: "#08080c", light: "#ffffff" } }).then(setQrPng).catch(() => {});
+  }, [url, origin]);
+
+  async function downloadQr(kind: "png" | "svg") {
+    if (kind === "png") { if (qrPng) triggerDownload(qrPng, `qr-${slug}.png`); return; }
+    const svg = await QRCode.toString(url, { type: "svg", margin: 1, color: { dark: "#08080c", light: "#ffffff" } });
+    const href = URL.createObjectURL(new Blob([svg], { type: "image/svg+xml" }));
+    triggerDownload(href, `qr-${slug}.svg`);
+    setTimeout(() => URL.revokeObjectURL(href), 2000);
+  }
 
   async function copy() {
     try { await navigator.clipboard.writeText(url); setCopied(true); setTimeout(() => setCopied(false), 1600); } catch { /* noop */ }
@@ -43,12 +67,40 @@ export function ShareEvent({ slug, title }: { slug: string; title: string }) {
           className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">Facebook</a>
         <a href={`https://twitter.com/intent/tweet?text=${encodeURIComponent(msg)}`} target="_blank" rel="noreferrer"
           className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">X</a>
+        <a href={`https://www.linkedin.com/sharing/share-offsite/?url=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer"
+          className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">LinkedIn</a>
         <button onClick={nativeShare} className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">
           <Share2 className="h-4 w-4" /> Más
         </button>
         <a href={`/e/${slug}`} target="_blank" className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">
           <ExternalLink className="h-4 w-4" /> Ver página
         </a>
+      </div>
+
+      {/* Previsualización social (Open Graph auto-generado) + QR */}
+      <div className="mt-6 grid gap-4 sm:grid-cols-[1fr_auto]">
+        <div>
+          <div className="mb-2 text-xs uppercase tracking-wide text-muted">Previsualización al compartir</div>
+          <div className="overflow-hidden rounded-2xl border border-line bg-surface">
+            {/* La imagen OG real (1200×630). Así es como se verá el enlace en WhatsApp/FB/LinkedIn. */}
+            <img src={ogUrl} alt="Previsualización Open Graph del evento" className="aspect-[1200/630] w-full object-cover" />
+            <div className="truncate border-t border-line px-3 py-2 text-xs text-muted">{url.replace(/^https?:\/\//, "")}</div>
+          </div>
+        </div>
+        <div className="flex flex-col items-center gap-2">
+          <div className="mb-0.5 flex items-center gap-1.5 text-xs uppercase tracking-wide text-muted"><QrCode className="h-3.5 w-3.5" /> QR</div>
+          <div className="rounded-2xl border border-line bg-white p-2">
+            {qrPng ? <img src={qrPng} alt="Código QR del evento" className="h-[132px] w-[132px]" /> : <div className="h-[132px] w-[132px]" />}
+          </div>
+          <div className="flex gap-1.5">
+            <button onClick={() => downloadQr("png")} className="flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-medium transition hover:border-white/20">
+              <Download className="h-3 w-3" /> PNG
+            </button>
+            <button onClick={() => downloadQr("svg")} className="flex items-center gap-1 rounded-lg border border-line px-2.5 py-1.5 text-[11px] font-medium transition hover:border-white/20">
+              <Download className="h-3 w-3" /> SVG
+            </button>
+          </div>
+        </div>
       </div>
     </div>
   );

@@ -9,6 +9,10 @@ const nextConfig = {
       { protocol: "https", hostname: "images.unsplash.com" },
     ],
   },
+  // Incluye las fuentes TTF (OG image) en el bundle serverless de la ruta /e/[slug]/og.
+  outputFileTracingIncludes: {
+    "/e/[slug]/og": ["./src/app/e/[slug]/og/fonts/**"],
+  },
 };
 
 /**

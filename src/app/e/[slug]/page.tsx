@@ -12,38 +12,34 @@ import { QueueGate } from "@/components/event/QueueGate";
 import { PresaleRegister } from "@/components/event/PresaleRegister";
 import { ResaleListings, type ResaleItem } from "@/components/event/ResaleListings";
 import { resolvePrice, type PricePhase } from "@/lib/ticketing/pricing";
+import { loadEventForOg, ogTitleDesc, ogVersion } from "@/lib/og/eventOg";
 
 export const dynamic = "force-dynamic";
 
 export async function generateMetadata({ params }: { params: Promise<{ slug: string }> }): Promise<Metadata> {
   const { slug } = await params;
-  const db = createPublicClient();
-  const { data: e } = await db
-    .from("events")
-    .select("title, description, cover_image, city, region, organizations(name, white_label)")
-    .eq("slug", slug)
-    .eq("status", "published")
-    .maybeSingle<{ title: string; description: string | null; cover_image: string | null; city: string | null; region: string | null; organizations: { name: string; white_label: boolean } | null }>();
-
+  const e = await loadEventForOg(slug);
   if (!e) return { title: "Evento | ShaarPass" };
-  const place = [e.city, e.region].filter(Boolean).join(", ");
-  // White-label: la marca en el título es la del organizador, no ShaarPass.
-  const brand = e.organizations?.white_label ? (e.organizations?.name ?? "") : "ShaarPass";
-  const title = `${e.title}${place ? ` · ${place}` : ""}${brand ? ` | ${brand}` : ""}`;
-  // `??` no atrapa "" (cadena vacía): usamos truthy + limpieza para evitar
-  // descripciones vacías cuando el organizador no llenó el campo.
-  const clean = e.description?.replace(/\s+/g, " ").trim();
-  const description = (clean && clean.length > 0
-    ? clean
-    : `Boletos para ${e.title}${place ? ` en ${place}` : ""}. Asegura tu lugar — pago seguro y QR al instante con ShaarPass.`
-  ).slice(0, 160);
-  const images = e.cover_image ? [e.cover_image] : ["/og.jpg"];
+
+  const { title, description } = ogTitleDesc(e);
+  const base = process.env.NEXT_PUBLIC_APP_URL ?? "https://www.shaarpass.io";
+  const canonical = `${base}/e/${slug}`;
+  // Imagen OG dinámica por evento (premium, auto-generada). ?v= = cache-busting por contenido.
+  const ogImage = `${base}/e/${slug}/og?v=${ogVersion(e)}`;
+
   return {
     title,
     description,
     alternates: { canonical: `/e/${slug}` },
-    openGraph: { title, description, images, type: "website" },
-    twitter: { card: "summary_large_image", title, description, images },
+    openGraph: {
+      title,
+      description,
+      url: canonical,
+      type: "website",
+      siteName: "ShaarPass",
+      images: [{ url: ogImage, width: 1200, height: 630, alt: e.title }],
+    },
+    twitter: { card: "summary_large_image", title, description, images: [ogImage] },
   };
 }
 
