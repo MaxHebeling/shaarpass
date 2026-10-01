@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { resolvePrice, validatePhases, type PricePhase } from "./pricing";
+import { resolvePrice, validatePhases, linkSalePhase, type PricePhase } from "./pricing";
 import { wallTimeToISO } from "@/lib/datetime";
 
 // Escenario base: preventa $200 (del 1 al 10 nov) → venta $250 (del 10 al 13 nov).
@@ -136,5 +136,45 @@ describe("validatePhases", () => {
   it("rechaza precio negativo", () => {
     const { errors } = validatePhases([{ kind: "sale", priceCents: -1, startsAt: null, endsAt: null }]);
     expect(errors.some((e) => e.includes("mayor o igual a 0"))).toBe(true);
+  });
+});
+
+// ─── venta enlazada a la preventa (bug "Venta → Inicia" no persistía) ─────────
+
+describe("linkSalePhase + transición de precio", () => {
+  const MTY = "America/Monterrey";
+  const presaleEnd = wallTimeToISO("2026-11-01", "00:00", MTY); // la venta debe arrancar aquí
+
+  it("venta sin inicio → arranca al terminar la preventa", () => {
+    const linked = linkSalePhase([
+      { kind: "presale", priceCents: 20000, startsAt: wallTimeToISO("2026-10-01", "00:00", MTY), endsAt: presaleEnd },
+      { kind: "sale", priceCents: 25000, startsAt: null, endsAt: null },
+    ]);
+    const sale = linked.find((p) => p.kind === "sale")!;
+    expect(sale.startsAt).toBe(presaleEnd);
+  });
+
+  it("el precio vigente cambia a $250 el 01/11 00:00 (zona del evento)", () => {
+    const phases: PricePhase[] = linkSalePhase([
+      { kind: "presale", priceCents: 20000, startsAt: wallTimeToISO("2026-10-01", "00:00", MTY), endsAt: presaleEnd },
+      { kind: "sale", priceCents: 25000, startsAt: null, endsAt: wallTimeToISO("2026-11-13", "19:00", MTY) },
+    ]).map((p) => ({ id: p.kind, ...p }));
+
+    // 31/10 23:59 Monterrey → preventa $200
+    expect(resolvePrice(phases, new Date(wallTimeToISO("2026-10-31", "23:59", MTY)))).toMatchObject({ status: "presale", priceCents: 20000 });
+    // 01/11 00:00 Monterrey exacto → venta $250
+    expect(resolvePrice(phases, new Date(presaleEnd))).toMatchObject({ status: "sale", priceCents: 25000 });
+    // 01/11 00:01 Monterrey → venta $250
+    expect(resolvePrice(phases, new Date(wallTimeToISO("2026-11-01", "00:01", MTY)))).toMatchObject({ status: "sale", priceCents: 25000 });
+  });
+
+  it("si la venta queda sin inicio (bug), NO opaca a la preventa activa", () => {
+    // Sin enlazar: venta con inicio null = 'siempre activa'. El tie-break por fin
+    // más cercano hace que la preventa (acotada) gane durante su ventana.
+    const phases: PricePhase[] = [
+      { id: "pre", kind: "presale", priceCents: 20000, startsAt: wallTimeToISO("2026-10-01", "00:00", MTY), endsAt: presaleEnd },
+      { id: "sal", kind: "sale", priceCents: 25000, startsAt: null, endsAt: null },
+    ];
+    expect(resolvePrice(phases, new Date(wallTimeToISO("2026-10-15", "12:00", MTY))).priceCents).toBe(20000);
   });
 });

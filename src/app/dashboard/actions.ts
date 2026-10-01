@@ -7,7 +7,7 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { countRecipients, processNotificationJob, type FieldChange, type ChangePayload } from "@/lib/notifications/eventChange";
 import { parseCustomFields } from "@/lib/ticketing/customFields";
 import type { Segment } from "@/lib/email/campaignSend";
-import { validatePhases, type PhaseInput } from "@/lib/ticketing/pricing";
+import { validatePhases, linkSalePhase, type PhaseInput } from "@/lib/ticketing/pricing";
 import { eventBounds, validateDays, type EventDayInput } from "@/lib/ticketing/schedule";
 
 /** Guarda la definición de campos de registro personalizados de un evento.
@@ -75,7 +75,10 @@ async function applyPhaseEdits(
   desired: PhaseInput[],
 ): Promise<{ error?: string }> {
   const now = Date.now();
-  const started = (s: string | null) => (s === null ? true : Date.parse(s) <= now);
+  // "Iniciada" = tiene un inicio EXPLÍCITO ya pasado. Una fase sin inicio (venta
+  // abierta migrada) NO se considera iniciada: debe poder reconfigurarse (fijarle
+  // inicio/precio). Los precios ya cobrados quedan congelados en order_items.
+  const started = (s: string | null) => (s !== null && Date.parse(s) <= now);
   const { data: existing } = await db
     .from("ticket_price_phases")
     .select("id, kind, price_cents, starts_at, ends_at")
@@ -211,7 +214,7 @@ export async function createEvent(form: {
       .single();
     if (ttErr || !tt) return { error: `Evento creado pero falló crear boletos: ${ttErr?.message}` };
     // Si no vienen fases (compat), crea una fase 'sale' con el precio base.
-    const phases: PhaseInput[] = t.phases?.length ? t.phases : [{ kind: "sale", priceCents: base.priceCents, startsAt: null, endsAt: null }];
+    const phases: PhaseInput[] = linkSalePhase(t.phases?.length ? t.phases : [{ kind: "sale", priceCents: base.priceCents, startsAt: null, endsAt: null }]);
     await writeNewPhases(db, tt.id, phases);
   }
 
@@ -411,7 +414,7 @@ export async function updateTicketType(form: {
   const q = Math.round(form.quantity);
   if (tt && q < tt.quantity_sold) return { error: `Ya vendiste ${tt.quantity_sold}; la cantidad no puede ser menor` };
 
-  const phases = form.phases ?? (form.price != null ? [{ kind: "sale" as const, priceCents: Math.round(form.price * 100), startsAt: null, endsAt: null }] : []);
+  const phases = linkSalePhase(form.phases ?? (form.price != null ? [{ kind: "sale" as const, priceCents: Math.round(form.price * 100), startsAt: null, endsAt: null }] : []));
   if (phases.length) {
     const { errors } = validatePhases(phases, { eventEndsAt: form.eventEndsAt ?? null });
     if (errors.length) return { error: errors[0] };
@@ -437,9 +440,9 @@ export async function addTicketType(form: {
 }) {
   const db = await createClient();
   if (!form.name.trim()) return { error: "Nombre requerido" };
-  const phases: PhaseInput[] = form.phases?.length
+  const phases: PhaseInput[] = linkSalePhase(form.phases?.length
     ? form.phases
-    : [{ kind: "sale", priceCents: Math.round((form.price ?? 0) * 100), startsAt: null, endsAt: null }];
+    : [{ kind: "sale", priceCents: Math.round((form.price ?? 0) * 100), startsAt: null, endsAt: null }]);
   const { errors } = validatePhases(phases, { eventEndsAt: form.eventEndsAt ?? null });
   if (errors.length) return { error: errors[0] };
   const base = basePriceFromPhases(phases, Math.round((form.price ?? 0) * 100));

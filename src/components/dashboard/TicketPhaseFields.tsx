@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { wallTimeToISO, isoToWallParts } from "@/lib/datetime";
 import type { PhaseInput, PricePhase } from "@/lib/ticketing/pricing";
 
@@ -53,11 +54,22 @@ export function phasesToPricing(phases: PricePhase[], tz: string, currency = "")
   };
   const presale = phases.find((p) => p.kind === "presale");
   const sale = phases.find((p) => p.kind === "sale");
-  return { presaleEnabled: !!presale, presale: toRow(presale), sale: toRow(sale) };
+  const saleRow = toRow(sale);
+  // Si la venta arranca justo cuando termina la preventa, trátalo como "enlazada":
+  // dejamos el inicio vacío para mostrar "Inicia al terminar la preventa".
+  if (presale && sale && sale.startsAt && presale.endsAt && sale.startsAt === presale.endsAt) {
+    saleRow.startDate = "";
+    saleRow.startTime = "";
+  }
+  return { presaleEnabled: !!presale, presale: toRow(presale), sale: saleRow };
 }
 
-function PhaseBlock({ title, row, onChange, accent }: { title: string; row: PhaseRowUI; onChange: (r: PhaseRowUI) => void; accent?: boolean }) {
+function PhaseBlock({ title, row, onChange, accent, startHint }: { title: string; row: PhaseRowUI; onChange: (r: PhaseRowUI) => void; accent?: boolean; startHint?: string }) {
   const set = (patch: Partial<PhaseRowUI>) => onChange({ ...row, ...patch });
+  const startEmpty = !row.startDate && !row.startTime;
+  const [showStart, setShowStart] = useState(!startEmpty);
+  // Con pista (venta) y sin inicio definido: mostramos la etiqueta en vez del campo vacío.
+  const linked = Boolean(startHint) && startEmpty && !showStart;
   return (
     <div className={`rounded-xl border p-3 ${accent ? "border-fuchsia/30 bg-fuchsia-500/5" : "border-line bg-surface/40"}`}>
       <div className="mb-2 text-xs font-semibold">{title}</div>
@@ -68,10 +80,28 @@ function PhaseBlock({ title, row, onChange, accent }: { title: string; row: Phas
         </div>
         <div>
           <label className={lbl}>Inicia</label>
-          <div className="grid grid-cols-2 gap-1">
-            <input type="date" value={row.startDate} onChange={(e) => set({ startDate: e.target.value })} className={field} />
-            <input type="time" value={row.startTime} onChange={(e) => set({ startTime: e.target.value })} className={field} />
-          </div>
+          {linked ? (
+            <button
+              type="button"
+              onClick={() => setShowStart(true)}
+              className="flex w-full items-center justify-between rounded-lg border border-dashed border-fuchsia/40 bg-fuchsia-500/5 px-3 py-2 text-left text-[11px] text-muted transition hover:border-fuchsia/70"
+            >
+              <span>{startHint}</span>
+              <span className="text-fuchsia">definir fecha</span>
+            </button>
+          ) : (
+            <>
+              <div className="grid grid-cols-2 gap-1">
+                <input type="date" value={row.startDate} onChange={(e) => set({ startDate: e.target.value })} className={field} />
+                <input type="time" value={row.startTime} onChange={(e) => set({ startTime: e.target.value })} className={field} />
+              </div>
+              {startHint && (
+                <button type="button" onClick={() => { set({ startDate: "", startTime: "" }); setShowStart(false); }} className="mt-1 text-[10px] text-muted underline-offset-2 hover:underline">
+                  Dejar “{startHint.toLowerCase()}”
+                </button>
+              )}
+            </>
+          )}
         </div>
         <div>
           <label className={lbl}>Termina</label>
@@ -107,7 +137,7 @@ export function TicketPhaseFields({ value, onChange }: { value: TicketPricing; o
       {value.presaleEnabled ? (
         <>
           <PhaseBlock title="Preventa" row={value.presale} onChange={(r) => onChange({ ...value, presale: r })} accent />
-          <PhaseBlock title="Venta" row={value.sale} onChange={(r) => onChange({ ...value, sale: r })} />
+          <PhaseBlock title="Venta" row={value.sale} onChange={(r) => onChange({ ...value, sale: r })} startHint="Inicia al terminar la preventa" />
           {preHigher && (
             <p className="text-[11px] text-amber-400">El precio de preventa es mayor o igual al de venta.</p>
           )}
