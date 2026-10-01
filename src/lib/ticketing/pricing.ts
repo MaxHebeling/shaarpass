@@ -60,10 +60,12 @@ export function resolvePrice(phases: PricePhase[], now: Date = new Date()): Reso
   };
   if (!phases.length) return closed;
 
-  // Fase activa (a lo sumo una si no se traslapan; si hay varias, la de inicio más temprano).
+  // Fase activa. Si no se traslapan hay a lo sumo una; ante un traslape accidental
+  // (p. ej. venta sin inicio = "siempre activa") preferimos la que termina ANTES
+  // — así la preventa, acotada, gana sobre una venta de fin abierto.
   const active = phases
     .filter((p) => isActive(p, t))
-    .sort((a, b) => (ms(a.startsAt) ?? -Infinity) - (ms(b.startsAt) ?? -Infinity))[0];
+    .sort((a, b) => (ms(a.endsAt) ?? Infinity) - (ms(b.endsAt) ?? Infinity))[0];
   if (active) {
     return {
       status: active.kind,
@@ -163,4 +165,17 @@ export function validatePhases(
   }
 
   return { errors, warnings };
+}
+
+/**
+ * Si hay preventa y venta y la venta NO tiene inicio, la venta arranca justo cuando
+ * termina la preventa. Evita el traslape (venta sin inicio = "siempre activa", que
+ * opacaría a la preventa) y hace que el precio cambie exactamente al cerrar la preventa.
+ */
+export function linkSalePhase(phases: PhaseInput[]): PhaseInput[] {
+  const presale = phases.find((p) => p.kind === "presale");
+  if (!presale || !presale.endsAt) return phases;
+  return phases.map((p) =>
+    p.kind === "sale" && p.startsAt === null ? { ...p, startsAt: presale.endsAt } : p
+  );
 }
