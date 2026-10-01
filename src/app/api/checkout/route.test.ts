@@ -48,6 +48,7 @@ type Overrides = {
   priceCents?: number;
   existingOrder?: { id: string; stripe_payment_intent_id: string | null } | null;
   rpc?: Record<string, { data?: unknown; error?: unknown }>;
+  phases?: { id: string; ticket_type_id: string; kind: string; price_cents: number; starts_at: string | null; ends_at: string | null }[];
 };
 
 /** Valor con el que se filtró una columna (p. ej. filterVal(ctx, "idempotency_key")). */
@@ -98,6 +99,7 @@ function setup(o: Overrides = {}) {
       if (ctx.table === "ticket_types") {
         return { data: [{ id: TYPE_ID, price_cents: price, currency: "mxn", event_id: EVENT_ID }] };
       }
+      if (ctx.table === "ticket_price_phases") return { data: o.phases ?? [] };
       if (ctx.table === "tickets") return { data: [{ qr_token: "qr_1", ticket_types: { name: "General" } }] };
       return undefined;
     },
@@ -389,5 +391,51 @@ describe("checkout — control de acceso a la compra", () => {
     const res = await post(body({ presaleCode: "FAN2026" }));
     expect(res.status).toBe(200);
     expect(h.db.rpcCalls.some((c) => c.fn === "consume_presale_code")).toBe(true);
+  });
+});
+
+// ─── fases de precio (preventa / venta) ──────────────────────────────────────
+
+describe("checkout — fases de precio", () => {
+  const nowISO = (offsetMin: number) => new Date(Date.now() + offsetMin * 60_000).toISOString();
+
+  it("cobra el precio de la PREVENTA vigente, no el precio base", async () => {
+    setup({
+      phases: [
+        { id: "pre", ticket_type_id: TYPE_ID, kind: "presale", price_cents: 20_000, starts_at: nowISO(-60), ends_at: nowISO(60) },
+        { id: "sal", ticket_type_id: TYPE_ID, kind: "sale", price_cents: 25_000, starts_at: nowISO(60), ends_at: nowISO(240) },
+      ],
+    });
+    const res = await post(body());
+    expect(res.status).toBe(200);
+    const ins = h.db.queries.find((q) => q.table === "orders" && q.op === "insert")?.payload as { subtotal_cents: number } | undefined;
+    expect(ins?.subtotal_cents).toBe(20_000 * QTY); // preventa, no los $250 base
+  });
+
+  it("guarda la fase aplicada en order_items (auditoría)", async () => {
+    setup({
+      phases: [
+        { id: "pre", ticket_type_id: TYPE_ID, kind: "presale", price_cents: 20_000, starts_at: nowISO(-60), ends_at: nowISO(60) },
+        { id: "sal", ticket_type_id: TYPE_ID, kind: "sale", price_cents: 25_000, starts_at: nowISO(60), ends_at: nowISO(240) },
+      ],
+    });
+    await post(body());
+    const items = h.db.queries.find((q) => q.table === "order_items" && q.op === "insert")?.payload as Array<{ price_phase_id: string; phase_kind: string }> | undefined;
+    expect(items?.[0].phase_kind).toBe("presale");
+    expect(items?.[0].price_phase_id).toBe("pre");
+  });
+
+  it("tipo fuera de fase (próximamente) → 409 sin cobrar", async () => {
+    setup({ phases: [{ id: "sal", ticket_type_id: TYPE_ID, kind: "sale", price_cents: 25_000, starts_at: nowISO(60), ends_at: nowISO(240) }] });
+    const res = await post(body());
+    expect(res.status).toBe(409);
+    expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
+  });
+
+  it("venta cerrada → 409 sin cobrar", async () => {
+    setup({ phases: [{ id: "sal", ticket_type_id: TYPE_ID, kind: "sale", price_cents: 25_000, starts_at: nowISO(-240), ends_at: nowISO(-60) }] });
+    const res = await post(body());
+    expect(res.status).toBe(409);
+    expect(h.paymentIntentsCreate).not.toHaveBeenCalled();
   });
 });

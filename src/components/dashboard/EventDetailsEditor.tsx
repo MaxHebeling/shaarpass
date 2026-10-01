@@ -2,9 +2,10 @@
 
 import { useState, useTransition } from "react";
 import { Loader2, Check } from "lucide-react";
-import { updateEventDetails } from "@/app/dashboard/actions";
-import { wallTimeToISO, isoToWallParts, EVENT_TIMEZONES } from "@/lib/datetime";
+import { updateEventDetails, setEventDays } from "@/app/dashboard/actions";
+import { EVENT_TIMEZONES } from "@/lib/datetime";
 import { CURRENCIES } from "@/lib/currencies";
+import { EventDaysEditor, dayRowsToInput, inputToDayRows, type DayRow } from "@/components/dashboard/EventDaysEditor";
 
 const field = "w-full rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-sm outline-none transition focus:border-fuchsia/60";
 const label = "mb-1.5 block text-xs text-muted";
@@ -15,17 +16,14 @@ export interface EventDetails {
   timezone: string; currency: string; isOnline: boolean; notifyOnChange: boolean;
 }
 
-export function EventDetailsEditor({ e }: { e: EventDetails }) {
-  const startW = isoToWallParts(e.startsAt, e.timezone);
-  const endW = isoToWallParts(e.endsAt, e.timezone);
-
+export function EventDetailsEditor({ e, days }: { e: EventDetails; days: { dayDate: string; startsAt: string; endsAt: string }[] }) {
   const [f, setF] = useState({
     title: e.title, description: e.description ?? "", category: e.category ?? "",
     city: e.city ?? "", region: e.region ?? "",
-    startsDate: startW.date, startsTime: startW.time, endsDate: endW.date, endsTime: endW.time,
     timezone: e.timezone || "America/Mexico_City", currency: e.currency,
     isOnline: e.isOnline, notifyOnChange: e.notifyOnChange,
   });
+  const [dayRows, setDayRows] = useState<DayRow[]>(inputToDayRows(days, e.timezone));
   const [msg, setMsg] = useState<string | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const [pending, start] = useTransition();
@@ -34,11 +32,13 @@ export function EventDetailsEditor({ e }: { e: EventDetails }) {
   function save() {
     setMsg(null); setErr(null);
     start(async () => {
+      // 1) Horario por día (el trigger sincroniza inicio/fin del evento).
+      const d = await setEventDays({ eventId: e.id, days: dayRowsToInput(dayRows, f.timezone) });
+      if (d?.error) { setErr(d.error); return; }
+      // 2) Resto de detalles.
       const res = await updateEventDetails({
         eventId: e.id, title: f.title, description: f.description, category: f.category,
         venueName: "", city: f.city, region: f.region,
-        startsAt: wallTimeToISO(f.startsDate, f.startsTime, f.timezone),
-        endsAt: wallTimeToISO(f.endsDate, f.endsTime, f.timezone),
         timezone: f.timezone, currency: f.currency,
         isOnline: f.isOnline, notifyOnChange: f.notifyOnChange,
       });
@@ -86,21 +86,9 @@ export function EventDetailsEditor({ e }: { e: EventDetails }) {
             </select>
           </div>
         </div>
-        <div className="grid gap-4 sm:grid-cols-2">
-          <div>
-            <label className={label}>Inicia</label>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={f.startsDate} onChange={(e) => set("startsDate", e.target.value)} className={field} />
-              <input type="time" value={f.startsTime} onChange={(e) => set("startsTime", e.target.value)} className={field} />
-            </div>
-          </div>
-          <div>
-            <label className={label}>Termina</label>
-            <div className="grid grid-cols-2 gap-2">
-              <input type="date" value={f.endsDate} onChange={(e) => set("endsDate", e.target.value)} className={field} />
-              <input type="time" value={f.endsTime} onChange={(e) => set("endsTime", e.target.value)} className={field} />
-            </div>
-          </div>
+        <div>
+          <label className={label}>Horario por día</label>
+          <EventDaysEditor value={dayRows} onChange={setDayRows} />
         </div>
         <div className="grid gap-4 sm:grid-cols-3">
           <div className="sm:col-span-1">

@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
+import { resolveCurrentDay } from "@/lib/ticketing/eventDay";
 
 export const runtime = "nodejs";
 
@@ -10,7 +11,7 @@ type Result = "ok" | "already" | "invalid";
  * escáner, verifica el boleto (incl. código rotativo) y registra el acceso.
  */
 export async function POST(req: Request) {
-  const { staffToken, token, manual } = await req.json().catch(() => ({}));
+  const { staffToken, token, manual, eventDayId } = await req.json().catch(() => ({}));
   if (!staffToken || !token || typeof token !== "string") {
     return NextResponse.json({ result: "invalid" as Result, message: "Datos incompletos" }, { status: 400 });
   }
@@ -54,31 +55,37 @@ export async function POST(req: Request) {
   const ord = ticket.orders as unknown as { buyer_name: string | null } | null;
   const who = [at?.first_name, at?.last_name].filter(Boolean).join(" ") || ord?.buyer_name || null;
 
-  if (ticket.status !== "valid") {
-    return NextResponse.json({
-      result: "already" as Result,
-      message: ticket.status === "checked_in" ? "Este boleto ya fue utilizado" : `Boleto ${ticket.status}`,
-      attendee: who, type: tt?.name, at: ticket.checked_in_at, gate: ticket.checked_in_gate,
-    });
+  // Boleto anulado o reembolsado → no entra.
+  if (ticket.status === "void" || ticket.status === "refunded") {
+    return NextResponse.json({ result: "already" as Result, message: `Boleto ${ticket.status}`, attendee: who, type: tt?.name });
   }
 
-  // 4) Marca atómica valid → checked_in (doble-scan = 0 filas).
+  // 4) Día del evento al que aplica el escaneo (acceso POR DÍA).
+  const { data: days } = await db
+    .from("event_days").select("id, starts_at, ends_at, day_date").eq("event_id", sess.event_id).order("starts_at");
+  const dayList = (days ?? []).map((d) => ({ id: d.id as string, starts_at: d.starts_at as string, ends_at: d.ends_at as string }));
+  const chosen = eventDayId ? dayList.find((d) => d.id === eventDayId) ?? null : resolveCurrentDay(dayList);
+  if (!chosen) {
+    return NextResponse.json({ result: "invalid" as Result, message: "El evento no tiene días configurados", attendee: who, type: tt?.name });
+  }
+  const dayLabel = (days ?? []).find((d) => d.id === chosen.id)?.day_date as string | undefined;
+
+  // 5) Registro idempotente por (boleto, día). El UNIQUE evita doble ingreso el mismo día.
   const nowIso = new Date().toISOString();
-  const { data: updated } = await db
-    .from("tickets")
-    .update({ status: "checked_in", checked_in_at: nowIso, checked_in_by_staff: sess.staff_id, checked_in_gate: sess.gate })
-    .eq("id", ticket.id)
-    .eq("status", "valid")
-    .select("id")
-    .maybeSingle();
-
-  if (!updated) {
-    return NextResponse.json({ result: "already" as Result, message: "Este boleto ya fue utilizado", attendee: who, type: tt?.name });
+  const { error: insErr } = await db
+    .from("ticket_checkins")
+    .insert({ ticket_id: ticket.id, event_day_id: chosen.id, event_id: sess.event_id, checked_in_by_staff: sess.staff_id, gate: sess.gate });
+  if (insErr) {
+    if ((insErr as { code?: string }).code === "23505") {
+      return NextResponse.json({ result: "already" as Result, message: dayLabel ? `Ya registrado (${dayLabel})` : "Este boleto ya fue utilizado", attendee: who, type: tt?.name });
+    }
+    return NextResponse.json({ result: "invalid" as Result, message: "No se pudo registrar el acceso", attendee: who, type: tt?.name }, { status: 500 });
   }
 
-  // 5) Auditoría + actividad del escáner (no bloquea la respuesta si falla).
+  // Conveniencia + auditoría (no bloquean la respuesta si fallan).
+  await db.from("tickets").update({ status: "checked_in", checked_in_at: nowIso, checked_in_by_staff: sess.staff_id, checked_in_gate: sess.gate }).eq("id", ticket.id);
   await db.from("checkin_log").insert({ event_id: sess.event_id, ticket_id: ticket.id, staff_id: sess.staff_id, gate: sess.gate });
   await db.rpc("bump_staff_activity", { p_staff: sess.staff_id }).then(undefined, () => {});
 
-  return NextResponse.json({ result: "ok" as Result, message: "¡Bienvenido!", attendee: who, type: tt?.name, at: nowIso, gate: sess.gate });
+  return NextResponse.json({ result: "ok" as Result, message: dayLabel ? `¡Bienvenido! (${dayLabel})` : "¡Bienvenido!", attendee: who, type: tt?.name, at: nowIso, gate: sess.gate });
 }

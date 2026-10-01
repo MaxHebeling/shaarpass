@@ -2,28 +2,33 @@
 
 import { useState, useTransition } from "react";
 import { Plus, Trash2, Loader2 } from "lucide-react";
-import { createEvent, type TicketTypeInput } from "../actions";
+import { createEvent } from "../actions";
 import { CURRENCIES } from "@/lib/currencies";
-import { wallTimeToISO, EVENT_TIMEZONES } from "@/lib/datetime";
+import { EVENT_TIMEZONES } from "@/lib/datetime";
+import { EventDaysEditor, dayRowsToInput, defaultDayRows, type DayRow } from "@/components/dashboard/EventDaysEditor";
+import { TicketPhaseFields, pricingToPhases, defaultPricing, type TicketPricing } from "@/components/dashboard/TicketPhaseFields";
 
 const field = "w-full rounded-xl border border-line bg-surface/60 px-4 py-2.5 text-sm outline-none transition focus:border-fuchsia/60";
 const label = "mb-1.5 block text-xs text-muted";
 
+interface TicketRowState { name: string; quantity: number; pricing: TicketPricing }
+
 export default function NewEventPage() {
-  const [tickets, setTickets] = useState<TicketTypeInput[]>([{ name: "General", price: 250, quantity: 100 }]);
+  const [timezone, setTimezone] = useState("America/Mexico_City");
+  const [dayRows, setDayRows] = useState<DayRow[]>(defaultDayRows());
+  const [rows, setRows] = useState<TicketRowState[]>([{ name: "General", quantity: 100, pricing: defaultPricing("250") }]);
   const [publish, setPublish] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
 
-  function setTicket(i: number, patch: Partial<TicketTypeInput>) {
-    setTickets((t) => t.map((row, j) => (j === i ? { ...row, ...patch } : row)));
-  }
+  const setRow = (i: number, patch: Partial<TicketRowState>) =>
+    setRows((rs) => rs.map((r, j) => (j === i ? { ...r, ...patch } : r)));
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     setError(null);
     const f = new FormData(e.currentTarget);
-    const tz = String(f.get("timezone") || "America/Mexico_City");
+    const tz = timezone;
     start(async () => {
       const res = await createEvent({
         title: String(f.get("title")),
@@ -32,13 +37,17 @@ export default function NewEventPage() {
         city: String(f.get("city")),
         region: String(f.get("region")),
         venueName: String(f.get("venueName")),
-        startsAt: wallTimeToISO(String(f.get("startsDate")), String(f.get("startsTime")), tz),
-        endsAt: wallTimeToISO(String(f.get("endsDate")), String(f.get("endsTime")), tz),
+        days: dayRowsToInput(dayRows, tz),
         timezone: tz,
         currency: String(f.get("currency")),
         orgName: String(f.get("orgName")),
         publish,
-        tickets,
+        tickets: rows.map((r) => ({
+          name: r.name,
+          price: parseFloat(r.pricing.sale.price) || 0,
+          quantity: r.quantity,
+          phases: pricingToPhases(r.pricing, tz),
+        })),
       });
       if (res?.error) setError(res.error);
       // si tiene éxito, el server action redirige.
@@ -73,21 +82,15 @@ export default function NewEventPage() {
         </Section>
 
         <Section title="Cuándo y dónde">
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className={label}>Inicia *</label>
-              <div className="grid grid-cols-2 gap-2">
-                <input name="startsDate" type="date" required className={field} />
-                <input name="startsTime" type="time" required defaultValue="18:00" className={field} />
-              </div>
-            </div>
-            <div>
-              <label className={label}>Termina *</label>
-              <div className="grid grid-cols-2 gap-2">
-                <input name="endsDate" type="date" required className={field} />
-                <input name="endsTime" type="time" required defaultValue="21:00" className={field} />
-              </div>
-            </div>
+          <div>
+            <label className={label}>Zona horaria del evento</label>
+            <select name="timezone" value={timezone} onChange={(e) => setTimezone(e.target.value)} className={field}>
+              {EVENT_TIMEZONES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
+            </select>
+          </div>
+          <div>
+            <label className={label}>Horario por día *</label>
+            <EventDaysEditor value={dayRows} onChange={setDayRows} />
           </div>
           <div>
             <label className={label}>Lugar / venue</label>
@@ -109,44 +112,39 @@ export default function NewEventPage() {
               </select>
             </div>
           </div>
-          <div>
-            <label className={label}>Zona horaria del evento</label>
-            <select name="timezone" defaultValue="America/Mexico_City" className={field}>
-              {EVENT_TIMEZONES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
-            </select>
-          </div>
         </Section>
 
         <Section title="Boletos">
-          <div className="space-y-3">
-            {tickets.map((t, i) => (
-              <div key={i} className="grid grid-cols-[1fr_120px_120px_auto] items-end gap-3">
-                <div>
-                  {i === 0 && <label className={label}>Nombre</label>}
-                  <input value={t.name} onChange={(e) => setTicket(i, { name: e.target.value })} placeholder="General" className={field} />
+          <div className="space-y-4">
+            {rows.map((t, i) => (
+              <div key={i} className="rounded-2xl border border-line bg-surface/40 p-3">
+                <div className="grid grid-cols-[1fr_110px_auto] items-end gap-2">
+                  <div>
+                    <label className={label}>Nombre</label>
+                    <input value={t.name} onChange={(e) => setRow(i, { name: e.target.value })} placeholder="General" className={field} />
+                  </div>
+                  <div>
+                    <label className={label}>Cantidad</label>
+                    <input type="number" min={1} value={t.quantity} onChange={(e) => setRow(i, { quantity: Number(e.target.value) })} className={field} />
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setRows((ts) => ts.filter((_, j) => j !== i))}
+                    disabled={rows.length === 1}
+                    className="grid h-[42px] w-10 place-items-center rounded-xl border border-line text-muted transition hover:text-fuchsia disabled:opacity-30"
+                  >
+                    <Trash2 className="h-4 w-4" />
+                  </button>
                 </div>
-                <div>
-                  {i === 0 && <label className={label}>Precio</label>}
-                  <input type="number" min={0} step="0.01" value={t.price} onChange={(e) => setTicket(i, { price: Number(e.target.value) })} className={field} />
+                <div className="mt-3">
+                  <TicketPhaseFields value={t.pricing} onChange={(p) => setRow(i, { pricing: p })} />
                 </div>
-                <div>
-                  {i === 0 && <label className={label}>Cantidad</label>}
-                  <input type="number" min={1} value={t.quantity} onChange={(e) => setTicket(i, { quantity: Number(e.target.value) })} className={field} />
-                </div>
-                <button
-                  type="button"
-                  onClick={() => setTickets((ts) => ts.filter((_, j) => j !== i))}
-                  disabled={tickets.length === 1}
-                  className="grid h-10 w-10 place-items-center rounded-xl border border-line text-muted transition hover:text-fuchsia disabled:opacity-30"
-                >
-                  <Trash2 className="h-4 w-4" />
-                </button>
               </div>
             ))}
           </div>
           <button
             type="button"
-            onClick={() => setTickets((t) => [...t, { name: "", price: 0, quantity: 100 }])}
+            onClick={() => setRows((t) => [...t, { name: "", quantity: 100, pricing: defaultPricing() }])}
             className="mt-3 flex items-center gap-2 text-sm text-muted transition hover:text-fg"
           >
             <Plus className="h-4 w-4" /> Agregar tipo de boleto
