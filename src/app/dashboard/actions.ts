@@ -312,6 +312,40 @@ export interface UpdateEventResult {
   notify?: { recipients: number; sent: number; queued: boolean; fields: string[] };
 }
 
+// Formato de fecha/hora en la zona del evento (para las notificaciones a asistentes).
+const fmtDateTz = (iso: string, tz: string) => { try { return new Date(iso).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: tz || "America/Mexico_City" }); } catch { return ""; } };
+const fmtTimeTz = (iso: string, tz: string) => { try { return new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: tz || "America/Mexico_City" }); } catch { return ""; } };
+const locOf = (online: boolean, city: string | null, region: string | null) => online ? "Evento virtual (en línea)" : [city, region].filter(Boolean).join(", ") || "Por confirmar";
+
+/** Encola (y envía, si el evento es chico) una notificación de cambio a los asistentes. */
+async function dispatchEventChangeNotification(opts: {
+  eventId: string; userId: string | null; changes: FieldChange[];
+  eventTitle: string; orgName: string; newDate: string; newTime: string; newLocation: string;
+}): Promise<UpdateEventResult["notify"] | undefined> {
+  if (!opts.changes.length) return undefined;
+  const admin = createAdminClient();
+  const recipients = await countRecipients(admin, opts.eventId);
+  const payload: ChangePayload = { eventTitle: opts.eventTitle, orgName: opts.orgName, newDate: opts.newDate, newTime: opts.newTime, newLocation: opts.newLocation, changes: opts.changes };
+  const { data: log } = await admin.from("event_change_log").insert({
+    event_id: opts.eventId, changed_by: opts.userId, changes: opts.changes, recipients_count: recipients, channels: ["email"], status: "queued",
+  }).select("id").single();
+  const { data: job } = await admin.from("notification_jobs").insert({
+    event_id: opts.eventId, log_id: log?.id ?? null, type: "event_change", payload, channels: ["email"], status: "pending", recipients_count: recipients,
+  }).select("id, event_id, log_id, payload, channels").single();
+  const fields = opts.changes.map((c) => c.label);
+  if (!recipients || !job) return { recipients, sent: 0, queued: false, fields };
+  // Eventos chicos: enviar de inmediato. Grandes (>400): los drena el cron.
+  if (recipients <= 400) {
+    const { sent } = await processNotificationJob(admin, job as { id: string; event_id: string; log_id: string | null; payload: ChangePayload; channels: string[] });
+    return { recipients, sent, queued: false, fields };
+  }
+  const base = process.env.NEXT_PUBLIC_APP_URL;
+  if (base && process.env.CRON_SECRET) {
+    void fetch(`${base}/api/cron/process-notifications`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }).catch(() => {});
+  }
+  return { recipients, sent: 0, queued: true, fields };
+}
+
 export async function updateEventDetails(form: {
   eventId: string; title: string; description: string; category: string;
   venueName: string; city: string; region: string;
@@ -352,15 +386,11 @@ export async function updateEventDetails(form: {
   revalidatePath(`/dashboard/eventos/${form.eventId}`);
   if (!prev) return { ok: true };
 
-  // --- Detección de cambios que afectan la asistencia ---
-  const fmtDate = (iso: string, tz: string) => { try { return new Date(iso).toLocaleDateString("es-MX", { weekday: "long", day: "numeric", month: "long", year: "numeric", timeZone: tz || "America/Mexico_City" }); } catch { return ""; } };
-  const fmtTime = (iso: string, tz: string) => { try { return new Date(iso).toLocaleTimeString("es-MX", { hour: "2-digit", minute: "2-digit", timeZone: tz || "America/Mexico_City" }); } catch { return ""; } };
-  const locOf = (online: boolean, city: string | null, region: string | null) => online ? "Evento virtual (en línea)" : [city, region].filter(Boolean).join(", ") || "Por confirmar";
+  // --- Detección de cambios de UBICACIÓN/MODALIDAD que afectan la asistencia ---
+  // (La fecha/horario se notifican en setEventDays, que conoce el antes/después de los días.)
   const modOf = (online: boolean) => online ? "Virtual (en línea)" : "Presencial";
-
-  // Fecha/horario del evento (para la notificación) salen de los límites actuales.
-  const newDate = fmtDate(prev.starts_at, newTz);
-  const newTime = `${fmtTime(prev.starts_at, newTz)}–${fmtTime(prev.ends_at, newTz)}`;
+  const newDate = fmtDateTz(prev.starts_at, newTz);
+  const newTime = `${fmtTimeTz(prev.starts_at, newTz)}–${fmtTimeTz(prev.ends_at, newTz)}`;
   const oldLoc = locOf(prev.is_online, prev.city, prev.region), newLoc = locOf(newIsOnline, newCity, newRegion);
 
   const changes: FieldChange[] = [];
@@ -369,33 +399,12 @@ export async function updateEventDetails(form: {
 
   if (!changes.length || !notifyEnabled) return { ok: true };
 
-  // --- Notificación a asistentes (cola + auditoría, vía service role) ---
-  const admin = createAdminClient();
-  const recipients = await countRecipients(admin, form.eventId);
   const orgName = Array.isArray(prev.organizations) ? prev.organizations[0]?.name : prev.organizations?.name;
-  const payload: ChangePayload = { eventTitle: form.title.trim(), orgName: orgName ?? "ShaarPass", newDate, newTime, newLocation: newLoc, changes };
-
-  const { data: log } = await admin.from("event_change_log").insert({
-    event_id: form.eventId, changed_by: user?.id ?? null, changes, recipients_count: recipients, channels: ["email"], status: "queued",
-  }).select("id").single();
-
-  const { data: job } = await admin.from("notification_jobs").insert({
-    event_id: form.eventId, log_id: log?.id ?? null, type: "event_change", payload, channels: ["email"], status: "pending", recipients_count: recipients,
-  }).select("id, event_id, log_id, payload, channels").single();
-
-  if (!recipients || !job) return { ok: true, notify: { recipients, sent: 0, queued: false, fields: changes.map((c) => c.label) } };
-
-  // Eventos chicos: enviar de inmediato. Grandes (>400): los drena el cron.
-  if (recipients <= 400) {
-    const { sent } = await processNotificationJob(admin, job as { id: string; event_id: string; log_id: string | null; payload: ChangePayload; channels: string[] });
-    return { ok: true, notify: { recipients, sent, queued: false, fields: changes.map((c) => c.label) } };
-  }
-  // Kick best-effort al worker; el cron es la red de seguridad.
-  const base = process.env.NEXT_PUBLIC_APP_URL;
-  if (base && process.env.CRON_SECRET) {
-    void fetch(`${base}/api/cron/process-notifications`, { headers: { authorization: `Bearer ${process.env.CRON_SECRET}` } }).catch(() => {});
-  }
-  return { ok: true, notify: { recipients, sent: 0, queued: true, fields: changes.map((c) => c.label) } };
+  const notify = await dispatchEventChangeNotification({
+    eventId: form.eventId, userId: user?.id ?? null, changes,
+    eventTitle: form.title.trim(), orgName: orgName ?? "ShaarPass", newDate, newTime, newLocation: newLoc,
+  });
+  return { ok: true, notify };
 }
 
 export async function updateTicketType(form: {
@@ -462,10 +471,18 @@ export async function addTicketType(form: {
  *  días por fecha, inserta los nuevos y borra los que sobran SOLO si no tienen
  *  ingresos registrados (para no perder el historial de acceso). El trigger
  *  mantiene events.starts_at/ends_at sincronizados. */
-export async function setEventDays(form: { eventId: string; days: EventDayInput[] }) {
+export async function setEventDays(form: { eventId: string; days: EventDayInput[] }): Promise<UpdateEventResult> {
   const db = await createClient();
   const errs = validateDays(form.days);
   if (errs.length) return { error: errs[0] };
+  const { data: { user } } = await db.auth.getUser();
+
+  // Snapshot ANTES (para notificar si cambia la fecha/horario del evento).
+  const { data: prev } = await db
+    .from("events")
+    .select("starts_at, ends_at, timezone, title, city, region, is_online, notify_on_change, organizations(name)")
+    .eq("id", form.eventId)
+    .maybeSingle<{ starts_at: string; ends_at: string; timezone: string; title: string; city: string | null; region: string | null; is_online: boolean; notify_on_change: boolean; organizations: { name: string } | { name: string }[] | null }>();
 
   const { data: existing } = await db
     .from("event_days")
@@ -495,7 +512,27 @@ export async function setEventDays(form: { eventId: string; days: EventDayInput[
     if (error) return { error: error.message };
   }
   revalidatePath(`/dashboard/eventos/${form.eventId}`);
-  return { ok: true };
+
+  // --- Notificar a asistentes si cambió la FECHA u HORARIO del evento ---
+  if (!prev) return { ok: true };
+  const tz = prev.timezone;
+  const nb = eventBounds(form.days)!; // nuevos límites (primer inicio / último fin)
+  const oldDate = fmtDateTz(prev.starts_at, tz), newDate = fmtDateTz(nb.startsAt, tz);
+  const oldTime = `${fmtTimeTz(prev.starts_at, tz)}–${fmtTimeTz(prev.ends_at, tz)}`;
+  const newTime = `${fmtTimeTz(nb.startsAt, tz)}–${fmtTimeTz(nb.endsAt, tz)}`;
+
+  const changes: FieldChange[] = [];
+  if (oldDate !== newDate) changes.push({ field: "event_date", label: "Fecha", old: oldDate, new: newDate });
+  if (oldTime !== newTime) changes.push({ field: "start_time", label: "Horario", old: oldTime, new: newTime });
+  if (!changes.length || !prev.notify_on_change) return { ok: true };
+
+  const orgName = Array.isArray(prev.organizations) ? prev.organizations[0]?.name : prev.organizations?.name;
+  const notify = await dispatchEventChangeNotification({
+    eventId: form.eventId, userId: user?.id ?? null, changes,
+    eventTitle: prev.title, orgName: orgName ?? "ShaarPass",
+    newDate, newTime, newLocation: locOf(prev.is_online, prev.city, prev.region),
+  });
+  return { ok: true, notify };
 }
 
 export async function setEventCover(eventId: string, coverUrl: string | null) {

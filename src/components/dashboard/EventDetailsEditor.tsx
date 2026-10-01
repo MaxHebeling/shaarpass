@@ -43,14 +43,16 @@ export function EventDetailsEditor({ e, days }: { e: EventDetails; days: { dayDa
         isOnline: f.isOnline, notifyOnChange: f.notifyOnChange,
       });
       if (res?.error) { setErr(res.error); return; }
-      if (res?.notify) {
-        const n = res.notify;
+      // El aviso puede venir del cambio de fecha/horario (días) o de ubicación/modalidad.
+      const n = res?.notify ?? d?.notify;
+      if (n) {
+        const fields = [...new Set([...(d?.notify?.fields ?? []), ...(res?.notify?.fields ?? [])])];
         const detail = n.queued
           ? `📧 Enviando notificaciones automáticas a ${n.recipients} asistentes…`
           : n.recipients > 0
             ? `📧 Se enviaron notificaciones automáticas a ${n.sent} de ${n.recipients} asistentes.`
             : "No hay asistentes registrados todavía.";
-        setMsg(`✅ Se detectaron cambios importantes (${n.fields.join(", ")}). ${detail}`);
+        setMsg(`✅ Se detectaron cambios importantes (${fields.join(", ")}). ${detail}`);
       } else setMsg("✅ Guardado");
     });
   }
