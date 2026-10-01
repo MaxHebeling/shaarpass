@@ -41,6 +41,38 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     .select("id, name, price_cents, quantity_total, quantity_sold, is_seated")
     .eq("event_id", id)
     .order("price_cents");
+  const typeIds = (types ?? []).map((t) => t.id);
+
+  // Días del evento (horario) + fases de precio por tipo de boleto.
+  const { data: edays } = await db
+    .from("event_days")
+    .select("id, day_date, starts_at, ends_at")
+    .eq("event_id", id)
+    .order("starts_at");
+  const eventDays = (edays ?? []).map((d) => ({ dayDate: d.day_date as string, startsAt: d.starts_at as string, endsAt: d.ends_at as string }));
+
+  const { data: phaseRows } = typeIds.length
+    ? await db.from("ticket_price_phases").select("id, ticket_type_id, kind, price_cents, starts_at, ends_at").in("ticket_type_id", typeIds)
+    : { data: [] as { id: string; ticket_type_id: string; kind: string; price_cents: number; starts_at: string | null; ends_at: string | null }[] };
+  const phasesByType = new Map<string, { id: string; kind: "presale" | "sale"; priceCents: number; startsAt: string | null; endsAt: string | null }[]>();
+  for (const r of phaseRows ?? []) {
+    const arr = phasesByType.get(r.ticket_type_id) ?? [];
+    arr.push({ id: r.id, kind: r.kind as "presale" | "sale", priceCents: r.price_cents, startsAt: r.starts_at, endsAt: r.ends_at });
+    phasesByType.set(r.ticket_type_id, arr);
+  }
+
+  // Ventas por fase y por tipo (para el resumen del organizador).
+  const { data: soldRows } = typeIds.length
+    ? await db.from("order_items").select("ticket_type_id, quantity, unit_price_cents, phase_kind, orders!inner(status, event_id)").eq("orders.status", "paid").eq("orders.event_id", id)
+    : { data: [] as { ticket_type_id: string; quantity: number; unit_price_cents: number; phase_kind: string | null }[] };
+  const salesByType = new Map<string, { presaleQty: number; presaleRev: number; saleQty: number; saleRev: number }>();
+  for (const r of soldRows ?? []) {
+    const a = salesByType.get(r.ticket_type_id) ?? { presaleQty: 0, presaleRev: 0, saleQty: 0, saleRev: 0 };
+    const rev = r.quantity * r.unit_price_cents;
+    if (r.phase_kind === "presale") { a.presaleQty += r.quantity; a.presaleRev += rev; }
+    else { a.saleQty += r.quantity; a.saleRev += rev; }
+    salesByType.set(r.ticket_type_id, a);
+  }
 
   // Conteo de asientos por tier (para el builder).
   const { data: seatCounts } = await db
@@ -216,7 +248,7 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
             id: "detalles", label: "Detalles", icon: <Pencil className="h-4 w-4" />,
             content: (
               <>
-                <EventDetailsEditor e={{
+                <EventDetailsEditor days={eventDays} e={{
                   id: event.id, title: event.title, description: event.description, category: event.category,
                   city: event.city, region: event.region, startsAt: event.starts_at, endsAt: event.ends_at,
                   timezone: event.timezone, currency: event.currency, isOnline: event.is_online, notifyOnChange: event.notify_on_change,
@@ -230,8 +262,9 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
             id: "boletos", label: "Boletos", icon: <TicketIcon className="h-4 w-4" />,
             content: (
               <>
-                <TicketTypesEditor eventId={id} currency={event.currency} initial={(types ?? []).map((t) => ({
+                <TicketTypesEditor eventId={id} currency={event.currency} timezone={event.timezone} eventEndsAt={event.ends_at} initial={(types ?? []).map((t) => ({
                   id: t.id, name: t.name, price_cents: t.price_cents, quantity_total: t.quantity_total, quantity_sold: t.quantity_sold,
+                  phases: phasesByType.get(t.id) ?? [], sales: salesByType.get(t.id) ?? null,
                 }))} />
                 <ServicesManager eventId={id} currency={event.currency} initial={svcRows ?? []} />
                 <PromoManager eventId={id} currency={event.currency} initial={promos ?? []} />

@@ -4,6 +4,7 @@ import { z } from "zod";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { getStripe } from "@/lib/stripe/client";
 import { computeFees } from "@/lib/ticketing/fees";
+import { resolvePrice, type PricePhase } from "@/lib/ticketing/pricing";
 import { paymentMethodsFor, paymentMethodOptions, requiresCustomer } from "@/lib/stripe/paymentMethods";
 import { validatePromo } from "@/lib/ticketing/promo";
 import { parseCustomFields, validateCustomData } from "@/lib/ticketing/customFields";
@@ -107,7 +108,41 @@ export async function POST(req: Request) {
   if (!types || types.length !== ids.length || types.some((t) => t.event_id !== eventId)) {
     return NextResponse.json({ error: "tipos de boleto inválidos" }, { status: 400 });
   }
-  const priceOf = new Map(types.map((t) => [t.id, t.price_cents]));
+
+  // Precio VIGENTE por fase (preventa/venta): se resuelve SIEMPRE en el servidor
+  // según la hora actual y las fases; nunca con el precio que manda el navegador.
+  // Si un tipo está fuera de toda fase (próximamente / cerrado), no se puede comprar.
+  const { data: phaseRows } = await db
+    .from("ticket_price_phases")
+    .select("id, ticket_type_id, kind, price_cents, starts_at, ends_at")
+    .in("ticket_type_id", ids);
+  const phasesByType = new Map<string, PricePhase[]>();
+  for (const r of phaseRows ?? []) {
+    const arr = phasesByType.get(r.ticket_type_id) ?? [];
+    arr.push({ id: r.id, kind: r.kind as "presale" | "sale", priceCents: r.price_cents, startsAt: r.starts_at, endsAt: r.ends_at });
+    phasesByType.set(r.ticket_type_id, arr);
+  }
+  const priceOf = new Map<string, number>();
+  const phaseOf = new Map<string, { id: string | null; kind: string | null }>();
+  const nowTs = new Date();
+  for (const t of types) {
+    const ph = phasesByType.get(t.id) ?? [];
+    if (!ph.length) {
+      // Sin fases (compat): venta abierta al precio base del tipo.
+      priceOf.set(t.id, t.price_cents);
+      phaseOf.set(t.id, { id: null, kind: null });
+      continue;
+    }
+    const r = resolvePrice(ph, nowTs);
+    if (!r.purchasable || r.priceCents == null) {
+      return NextResponse.json(
+        { error: r.status === "upcoming" ? "La venta de uno de los boletos aún no comienza." : "La venta de uno de los boletos ya cerró." },
+        { status: 409 },
+      );
+    }
+    priceOf.set(t.id, r.priceCents);
+    phaseOf.set(t.id, { id: r.phaseId, kind: r.phaseKind });
+  }
 
   // 1) Reserva inventario: asientos por evento (nuevo), asientos viejos, o cantidad (GA).
   for (const it of items) {
@@ -231,6 +266,8 @@ export async function POST(req: Request) {
       ticket_type_id: it.ticketTypeId,
       quantity: it.quantity,
       unit_price_cents: priceOf.get(it.ticketTypeId) ?? 0,
+      price_phase_id: phaseOf.get(it.ticketTypeId)?.id ?? null,
+      phase_kind: phaseOf.get(it.ticketTypeId)?.kind ?? null,
     }))
   );
   await db.from("ticket_holds").update({ order_id: order.id }).eq("session_id", sessionId).is("order_id", null);

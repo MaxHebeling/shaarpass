@@ -7,6 +7,8 @@ import { createAdminClient } from "@/lib/supabase/admin";
 import { countRecipients, processNotificationJob, type FieldChange, type ChangePayload } from "@/lib/notifications/eventChange";
 import { parseCustomFields } from "@/lib/ticketing/customFields";
 import type { Segment } from "@/lib/email/campaignSend";
+import { validatePhases, type PhaseInput } from "@/lib/ticketing/pricing";
+import { eventBounds, validateDays, type EventDayInput } from "@/lib/ticketing/schedule";
 
 /** Guarda la definición de campos de registro personalizados de un evento.
  *  RLS (event_org_write) garantiza que solo un miembro de la org pueda editarlo. */
@@ -31,8 +33,78 @@ function slugify(s: string) {
 
 export interface TicketTypeInput {
   name: string;
-  price: number; // en unidades de moneda (no centavos)
+  price: number; // precio de VENTA en unidades de moneda (compat / base)
   quantity: number;
+  /** Fases de precio (1 = solo venta; 2 = preventa + venta). Precio en CENTAVOS. */
+  phases?: PhaseInput[];
+}
+
+/** Precio base/compat del tipo = fase 'sale'. Fechas = min inicio / max fin. */
+function basePriceFromPhases(phases: PhaseInput[] | undefined, fallbackCents: number): {
+  priceCents: number; salesStart: string | null; salesEnd: string | null;
+} {
+  const list = phases ?? [];
+  const sale = list.find((p) => p.kind === "sale");
+  const starts = list.map((p) => p.startsAt).filter(Boolean) as string[];
+  const ends = list.map((p) => p.endsAt).filter(Boolean) as string[];
+  // Si alguna fase no tiene fin (null), el "fin de venta" compat queda null (abierto).
+  const anyOpenEnd = list.some((p) => p.endsAt === null);
+  return {
+    priceCents: sale ? sale.priceCents : fallbackCents,
+    salesStart: starts.length ? starts.reduce((a, b) => (Date.parse(a) < Date.parse(b) ? a : b)) : null,
+    salesEnd: anyOpenEnd || !ends.length ? null : ends.reduce((a, b) => (Date.parse(a) > Date.parse(b) ? a : b)),
+  };
+}
+
+/** Reescribe TODAS las fases de un tipo (uso en creación: nada vendido aún). */
+async function writeNewPhases(db: Awaited<ReturnType<typeof createClient>>, ticketTypeId: string, phases: PhaseInput[]) {
+  if (!phases.length) return;
+  await db.from("ticket_price_phases").insert(
+    phases.map((p) => ({ ticket_type_id: ticketTypeId, kind: p.kind, price_cents: p.priceCents, starts_at: p.startsAt, ends_at: p.endsAt }))
+  );
+}
+
+/**
+ * Aplica edición de fases respetando la regla: una fase YA INICIADA solo puede
+ * extender su fecha de fin (no cambiar precio ni inicio). Fases futuras: libres.
+ * Desactivar la preventa solo se permite si aún no inició.
+ */
+async function applyPhaseEdits(
+  db: Awaited<ReturnType<typeof createClient>>,
+  ticketTypeId: string,
+  desired: PhaseInput[],
+): Promise<{ error?: string }> {
+  const now = Date.now();
+  const started = (s: string | null) => (s === null ? true : Date.parse(s) <= now);
+  const { data: existing } = await db
+    .from("ticket_price_phases")
+    .select("id, kind, price_cents, starts_at, ends_at")
+    .eq("ticket_type_id", ticketTypeId);
+  const byKind = new Map((existing ?? []).map((p) => [p.kind as "presale" | "sale", p]));
+
+  for (const kind of ["presale", "sale"] as const) {
+    const want = desired.find((p) => p.kind === kind);
+    const have = byKind.get(kind);
+    if (want && have) {
+      if (started(have.starts_at)) {
+        // Solo extender el fin (nunca acortar por debajo del fin actual); precio/inicio intactos.
+        const oldEnd = have.ends_at as string | null;
+        const newEnd = want.endsAt;
+        const finalEnd = oldEnd && newEnd ? (Date.parse(newEnd) > Date.parse(oldEnd) ? newEnd : oldEnd) : (newEnd ?? oldEnd);
+        await db.from("ticket_price_phases").update({ ends_at: finalEnd }).eq("id", have.id);
+      } else {
+        await db.from("ticket_price_phases").update({ price_cents: want.priceCents, starts_at: want.startsAt, ends_at: want.endsAt }).eq("id", have.id);
+      }
+    } else if (want && !have) {
+      await db.from("ticket_price_phases").insert({ ticket_type_id: ticketTypeId, kind, price_cents: want.priceCents, starts_at: want.startsAt, ends_at: want.endsAt });
+    } else if (!want && have) {
+      if (kind === "presale" && started(have.starts_at)) {
+        return { error: "La preventa ya inició; no se puede desactivar (puedes ajustar su fin)." };
+      }
+      await db.from("ticket_price_phases").delete().eq("id", have.id);
+    }
+  }
+  return {};
 }
 
 export async function createEvent(form: {
@@ -42,8 +114,7 @@ export async function createEvent(form: {
   city: string;
   region: string;
   venueName: string;
-  startsAt: string;
-  endsAt: string;
+  days: EventDayInput[];
   timezone: string;
   currency: string;
   orgName: string;
@@ -53,6 +124,11 @@ export async function createEvent(form: {
   const db = await createClient();
   const { data: { user } } = await db.auth.getUser();
   if (!user) return { error: "No autenticado" };
+
+  // Días del evento (al menos uno; fin > inicio; sin fechas repetidas).
+  const dayErrors = validateDays(form.days);
+  if (dayErrors.length) return { error: dayErrors[0] };
+  const bounds = eventBounds(form.days)!;
 
   // 1) Org del usuario (o crear una la primera vez).
   let orgId: string | null = null;
@@ -100,8 +176,8 @@ export async function createEvent(form: {
       city: form.city || null,
       region: form.region || null,
       status: form.publish ? "published" : "draft",
-      starts_at: form.startsAt,
-      ends_at: form.endsAt,
+      starts_at: bounds.startsAt,
+      ends_at: bounds.endsAt,
       timezone: form.timezone || "America/Tijuana",
       currency: form.currency.toLowerCase(),
       published_at: form.publish ? new Date().toISOString() : null,
@@ -110,19 +186,33 @@ export async function createEvent(form: {
     .single();
   if (evErr || !event) return { error: `No se pudo crear el evento: ${evErr?.message}` };
 
-  // 4) Tipos de boleto
-  const rows = form.tickets
-    .filter((t) => t.name.trim() && t.quantity > 0)
-    .map((t) => ({
-      event_id: event.id,
-      name: t.name.trim(),
-      price_cents: Math.round(t.price * 100),
-      currency: form.currency.toLowerCase(),
-      quantity_total: Math.round(t.quantity),
-    }));
-  if (rows.length) {
-    const { error: ttErr } = await db.from("ticket_types").insert(rows);
-    if (ttErr) return { error: `Evento creado pero falló crear boletos: ${ttErr.message}` };
+  // 3b) Días del evento (el trigger mantiene events.starts_at/ends_at sincronizados).
+  const { error: daysErr } = await db.from("event_days").insert(
+    form.days.map((d, i) => ({ event_id: event.id, day_date: d.dayDate, starts_at: d.startsAt, ends_at: d.endsAt, sort: i }))
+  );
+  if (daysErr) return { error: `Evento creado pero falló el horario: ${daysErr.message}` };
+
+  // 4) Tipos de boleto + sus fases de precio (preventa/venta).
+  const valid = form.tickets.filter((t) => t.name.trim() && t.quantity > 0);
+  for (const t of valid) {
+    const base = basePriceFromPhases(t.phases, Math.round(t.price * 100));
+    const { data: tt, error: ttErr } = await db
+      .from("ticket_types")
+      .insert({
+        event_id: event.id,
+        name: t.name.trim(),
+        price_cents: base.priceCents,
+        currency: form.currency.toLowerCase(),
+        quantity_total: Math.round(t.quantity),
+        sales_start: base.salesStart,
+        sales_end: base.salesEnd,
+      })
+      .select("id")
+      .single();
+    if (ttErr || !tt) return { error: `Evento creado pero falló crear boletos: ${ttErr?.message}` };
+    // Si no vienen fases (compat), crea una fase 'sale' con el precio base.
+    const phases: PhaseInput[] = t.phases?.length ? t.phases : [{ kind: "sale", priceCents: base.priceCents, startsAt: null, endsAt: null }];
+    await writeNewPhases(db, tt.id, phases);
   }
 
   revalidatePath("/dashboard");
@@ -225,7 +315,7 @@ export interface UpdateEventResult {
 export async function updateEventDetails(form: {
   eventId: string; title: string; description: string; category: string;
   venueName: string; city: string; region: string;
-  startsAt: string; endsAt: string; timezone: string; currency: string;
+  timezone: string; currency: string;
   isOnline?: boolean; notifyOnChange?: boolean;
 }): Promise<UpdateEventResult> {
   const db = await createClient();
@@ -246,14 +336,13 @@ export async function updateEventDetails(form: {
   const notifyEnabled = form.notifyOnChange ?? prev?.notify_on_change ?? true;
 
   // RLS event_org_write garantiza que solo un miembro de la org pueda editarlo.
+  // Las fechas NO se editan aquí: viven en event_days (ver setEventDays).
   const { error } = await db.from("events").update({
     title: form.title.trim(),
     description: form.description?.trim() || null,
     category: form.category?.trim() || null,
     city: newCity,
     region: newRegion,
-    starts_at: form.startsAt,
-    ends_at: form.endsAt,
     timezone: newTz,
     currency: form.currency.toLowerCase(),
     is_online: newIsOnline,
@@ -269,14 +358,12 @@ export async function updateEventDetails(form: {
   const locOf = (online: boolean, city: string | null, region: string | null) => online ? "Evento virtual (en línea)" : [city, region].filter(Boolean).join(", ") || "Por confirmar";
   const modOf = (online: boolean) => online ? "Virtual (en línea)" : "Presencial";
 
-  const oldDate = fmtDate(prev.starts_at, prev.timezone), newDate = fmtDate(form.startsAt, newTz);
-  const oldTime = `${fmtTime(prev.starts_at, prev.timezone)}–${fmtTime(prev.ends_at, prev.timezone)}`;
-  const newTime = `${fmtTime(form.startsAt, newTz)}–${fmtTime(form.endsAt, newTz)}`;
+  // Fecha/horario del evento (para la notificación) salen de los límites actuales.
+  const newDate = fmtDate(prev.starts_at, newTz);
+  const newTime = `${fmtTime(prev.starts_at, newTz)}–${fmtTime(prev.ends_at, newTz)}`;
   const oldLoc = locOf(prev.is_online, prev.city, prev.region), newLoc = locOf(newIsOnline, newCity, newRegion);
 
   const changes: FieldChange[] = [];
-  if (oldDate !== newDate) changes.push({ field: "event_date", label: "Fecha", old: oldDate, new: newDate });
-  if (oldTime !== newTime || prev.timezone !== newTz) changes.push({ field: "start_time", label: "Horario", old: oldTime, new: newTime });
   if (oldLoc !== newLoc) changes.push({ field: "venue", label: "Ubicación", old: oldLoc, new: newLoc });
   if (prev.is_online !== newIsOnline) changes.push({ field: "event_type", label: "Modalidad", old: modOf(prev.is_online), new: modOf(newIsOnline) });
 
@@ -312,18 +399,32 @@ export async function updateEventDetails(form: {
 }
 
 export async function updateTicketType(form: {
-  id: string; eventId: string; name: string; price: number; quantity: number;
+  id: string; eventId: string; name: string; quantity: number;
+  price?: number; // compat: precio de venta si no vienen fases
+  phases?: PhaseInput[];
+  eventEndsAt?: string | null;
 }) {
   const db = await createClient();
   if (!form.name.trim()) return { error: "Nombre requerido" };
-  // No permitir cantidad menor a lo ya vendido.
-  const { data: tt } = await db.from("ticket_types").select("quantity_sold").eq("id", form.id).maybeSingle();
+  // No permitir cantidad menor a lo ya vendido (inventario compartido entre fases).
+  const { data: tt } = await db.from("ticket_types").select("quantity_sold, price_cents").eq("id", form.id).maybeSingle();
   const q = Math.round(form.quantity);
   if (tt && q < tt.quantity_sold) return { error: `Ya vendiste ${tt.quantity_sold}; la cantidad no puede ser menor` };
+
+  const phases = form.phases ?? (form.price != null ? [{ kind: "sale" as const, priceCents: Math.round(form.price * 100), startsAt: null, endsAt: null }] : []);
+  if (phases.length) {
+    const { errors } = validatePhases(phases, { eventEndsAt: form.eventEndsAt ?? null });
+    if (errors.length) return { error: errors[0] };
+    const res = await applyPhaseEdits(db, form.id, phases);
+    if (res.error) return { error: res.error };
+  }
+  const base = basePriceFromPhases(phases, tt?.price_cents ?? 0);
   const { error } = await db.from("ticket_types").update({
     name: form.name.trim(),
-    price_cents: Math.round(form.price * 100),
     quantity_total: q,
+    price_cents: base.priceCents,
+    sales_start: base.salesStart,
+    sales_end: base.salesEnd,
   }).eq("id", form.id);
   if (error) return { error: error.message };
   revalidatePath(`/dashboard/eventos/${form.eventId}`);
@@ -331,18 +432,68 @@ export async function updateTicketType(form: {
 }
 
 export async function addTicketType(form: {
-  eventId: string; currency: string; name: string; price: number; quantity: number;
+  eventId: string; currency: string; name: string; quantity: number;
+  price?: number; phases?: PhaseInput[]; eventEndsAt?: string | null;
 }) {
   const db = await createClient();
   if (!form.name.trim()) return { error: "Nombre requerido" };
-  const { error } = await db.from("ticket_types").insert({
+  const phases: PhaseInput[] = form.phases?.length
+    ? form.phases
+    : [{ kind: "sale", priceCents: Math.round((form.price ?? 0) * 100), startsAt: null, endsAt: null }];
+  const { errors } = validatePhases(phases, { eventEndsAt: form.eventEndsAt ?? null });
+  if (errors.length) return { error: errors[0] };
+  const base = basePriceFromPhases(phases, Math.round((form.price ?? 0) * 100));
+  const { data: tt, error } = await db.from("ticket_types").insert({
     event_id: form.eventId,
     name: form.name.trim(),
-    price_cents: Math.round(form.price * 100),
+    price_cents: base.priceCents,
     currency: form.currency.toLowerCase(),
     quantity_total: Math.max(0, Math.round(form.quantity)),
-  });
-  if (error) return { error: error.message };
+    sales_start: base.salesStart,
+    sales_end: base.salesEnd,
+  }).select("id").single();
+  if (error || !tt) return { error: error?.message ?? "No se pudo crear el boleto" };
+  await writeNewPhases(db, tt.id, phases);
+  revalidatePath(`/dashboard/eventos/${form.eventId}`);
+  return { ok: true };
+}
+
+/** Actualiza el horario (días) de un evento de forma NO destructiva: actualiza los
+ *  días por fecha, inserta los nuevos y borra los que sobran SOLO si no tienen
+ *  ingresos registrados (para no perder el historial de acceso). El trigger
+ *  mantiene events.starts_at/ends_at sincronizados. */
+export async function setEventDays(form: { eventId: string; days: EventDayInput[] }) {
+  const db = await createClient();
+  const errs = validateDays(form.days);
+  if (errs.length) return { error: errs[0] };
+
+  const { data: existing } = await db
+    .from("event_days")
+    .select("id, day_date")
+    .eq("event_id", form.eventId);
+  const byDate = new Map((existing ?? []).map((d) => [d.day_date as string, d.id as string]));
+  const wanted = new Set(form.days.map((d) => d.dayDate));
+
+  // upsert por fecha
+  for (let i = 0; i < form.days.length; i++) {
+    const d = form.days[i];
+    const id = byDate.get(d.dayDate);
+    if (id) {
+      const { error } = await db.from("event_days").update({ starts_at: d.startsAt, ends_at: d.endsAt, sort: i }).eq("id", id);
+      if (error) return { error: error.message };
+    } else {
+      const { error } = await db.from("event_days").insert({ event_id: form.eventId, day_date: d.dayDate, starts_at: d.startsAt, ends_at: d.endsAt, sort: i });
+      if (error) return { error: error.message };
+    }
+  }
+  // borrar días que ya no están (solo si no tienen check-ins)
+  for (const [date, id] of byDate) {
+    if (wanted.has(date)) continue;
+    const { count } = await db.from("ticket_checkins").select("id", { count: "exact", head: true }).eq("event_day_id", id);
+    if (count && count > 0) return { error: `No se puede quitar el día ${date}: ya tiene ingresos registrados.` };
+    const { error } = await db.from("event_days").delete().eq("id", id);
+    if (error) return { error: error.message };
+  }
   revalidatePath(`/dashboard/eventos/${form.eventId}`);
   return { ok: true };
 }

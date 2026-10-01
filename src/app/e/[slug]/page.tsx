@@ -11,6 +11,7 @@ import { WaitlistForm } from "@/components/event/WaitlistForm";
 import { QueueGate } from "@/components/event/QueueGate";
 import { PresaleRegister } from "@/components/event/PresaleRegister";
 import { ResaleListings, type ResaleItem } from "@/components/event/ResaleListings";
+import { resolvePrice, type PricePhase } from "@/lib/ticketing/pricing";
 
 export const dynamic = "force-dynamic";
 
@@ -97,14 +98,43 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
     .eq("event_id", event.id)
     .order("price_cents", { ascending: true });
 
-  const tickets: SelectableTicket[] = (types ?? []).map((t) => ({
-    id: t.id,
-    name: t.name,
-    price_cents: t.price_cents,
-    currency: t.currency,
-    remaining: Math.max(0, t.quantity_total - t.quantity_sold),
-    max_per_order: t.max_per_order,
-  }));
+  // Fases de precio (preventa/venta) + días del evento (agenda).
+  const typeIds = (types ?? []).map((t) => t.id);
+  const { data: phaseRows } = typeIds.length
+    ? await db.from("ticket_price_phases").select("id, ticket_type_id, kind, price_cents, starts_at, ends_at").in("ticket_type_id", typeIds)
+    : { data: [] as { id: string; ticket_type_id: string; kind: string; price_cents: number; starts_at: string | null; ends_at: string | null }[] };
+  const phMap = new Map<string, PricePhase[]>();
+  for (const r of phaseRows ?? []) {
+    const a = phMap.get(r.ticket_type_id) ?? [];
+    a.push({ id: r.id, kind: r.kind as "presale" | "sale", priceCents: r.price_cents, startsAt: r.starts_at, endsAt: r.ends_at });
+    phMap.set(r.ticket_type_id, a);
+  }
+  const { data: edays } = await db
+    .from("event_days")
+    .select("day_date, starts_at, ends_at")
+    .eq("event_id", event.id)
+    .order("starts_at");
+
+  const nowD = new Date();
+  const tickets: SelectableTicket[] = (types ?? []).map((t) => {
+    const ph = phMap.get(t.id) ?? [];
+    const r = ph.length ? resolvePrice(ph, nowD) : null;
+    const current = r && r.priceCents != null ? r.priceCents : t.price_cents;
+    return {
+      id: t.id,
+      name: t.name,
+      price_cents: current,
+      currency: t.currency,
+      remaining: Math.max(0, t.quantity_total - t.quantity_sold),
+      max_per_order: t.max_per_order,
+      status: r ? r.status : "sale",
+      saleReferenceCents: r?.saleReferenceCents ?? null,
+      activeUntil: r?.activeUntil ?? null,
+      nextStartsAt: r?.nextStartsAt ?? null,
+      nextKind: r?.nextKind ?? null,
+      phaseKind: r?.phaseKind ?? null,
+    };
+  });
 
   // Reserved seating: si algún tier tiene asientos, cargamos el mapa.
   const isSeated = (types ?? []).some((t) => t.is_seated);
@@ -274,8 +304,17 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
         {/* Detalle */}
         <div>
           <div className="grid gap-4 sm:grid-cols-2">
-            <InfoCard icon={Calendar} title="Fecha" lines={[fmtDate(event.starts_at, event.timezone)]} />
-            <InfoCard icon={Clock} title="Hora" lines={[`${fmtTime(event.starts_at, event.timezone)} – ${fmtTime(event.ends_at, event.timezone)}`]} />
+            {(edays?.length ?? 0) > 1 ? (
+              <div className="sm:col-span-2">
+                <InfoCard icon={Calendar} title="Agenda"
+                  lines={(edays ?? []).map((d) => `${fmtDate(d.starts_at, event.timezone)} · ${fmtTime(d.starts_at, event.timezone)} – ${fmtTime(d.ends_at, event.timezone)}`)} />
+              </div>
+            ) : (
+              <>
+                <InfoCard icon={Calendar} title="Fecha" lines={[fmtDate(event.starts_at, event.timezone)]} />
+                <InfoCard icon={Clock} title="Hora" lines={[`${fmtTime(event.starts_at, event.timezone)} – ${fmtTime(event.ends_at, event.timezone)}`]} />
+              </>
+            )}
             <InfoCard icon={MapPin} title="Lugar" lines={[event.venues?.name ?? venueLine, event.venues?.address ?? ""].filter(Boolean)} />
             <InfoCard icon={Ticket} title="Boletos desde" lines={[tickets.length ? minPrice(tickets) : "—"]} />
           </div>
@@ -300,7 +339,7 @@ export default async function EventPage({ params }: { params: Promise<{ slug: st
             ) : isSeated ? (
               <SeatMap eventId={event.id} eventSlug={slug} currency={event.currency} seats={seats} tiers={seatTiers} absorbFees={absorbFees} />
             ) : (
-              <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} absorbFees={absorbFees} />
+              <TicketSelector eventId={event.id} eventSlug={slug} tickets={tickets} absorbFees={absorbFees} timezone={event.timezone} />
             )}
           </QueueGate>
           {event.presale_enabled && <PresaleRegister eventId={event.id} />}
