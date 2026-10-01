@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Copy, Check, MessageCircle, Share2, ExternalLink, Download, QrCode } from "lucide-react";
+import { Copy, Check, MessageCircle, Share2, ExternalLink, Download, QrCode, RefreshCw } from "lucide-react";
 import QRCode from "qrcode";
 
 function triggerDownload(href: string, name: string) {
@@ -100,6 +100,27 @@ export function ShareEvent({ slug, title }: { slug: string; title: string }) {
               <Download className="h-3 w-3" /> SVG
             </button>
           </div>
+        </div>
+      </div>
+
+      {/* Refrescar la vista previa cacheada por las redes sociales */}
+      <div className="mt-5 rounded-2xl border border-line bg-surface/40 p-4">
+        <div className="flex items-center gap-1.5 text-sm font-medium">
+          <RefreshCw className="h-3.5 w-3.5 text-gold" /> ¿La vista previa no se actualiza?
+        </div>
+        <p className="mt-1 text-xs leading-relaxed text-muted">
+          WhatsApp, Facebook y LinkedIn guardan la vista previa de un enlace por horas o días. Si cambiaste la portada,
+          el título o la fecha, vuelve a escanear el enlace aquí para que muestren la versión nueva (WhatsApp usa la caché de Facebook).
+        </p>
+        <div className="mt-3 flex flex-wrap gap-2">
+          <a href={`https://developers.facebook.com/tools/debug/?q=${encodeURIComponent(url)}`} target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">
+            <RefreshCw className="h-3.5 w-3.5" /> Facebook / WhatsApp
+          </a>
+          <a href={`https://www.linkedin.com/post-inspector/inspect/${encodeURIComponent(url)}`} target="_blank" rel="noreferrer"
+            className="flex items-center gap-1.5 rounded-xl border border-line px-3.5 py-2 text-sm font-medium transition hover:border-white/20">
+            <RefreshCw className="h-3.5 w-3.5" /> LinkedIn
+          </a>
         </div>
       </div>
     </div>
