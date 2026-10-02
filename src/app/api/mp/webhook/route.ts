@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTicketEmail } from "@/lib/email/tickets";
 import { getSellerToken, getPayment } from "@/lib/mp/client";
+import { verifyMpSignature } from "@/lib/mp/webhook";
 
 export const runtime = "nodejs";
 
@@ -25,6 +26,15 @@ async function handle(req: Request): Promise<NextResponse> {
 
   // Solo nos interesan pagos. Otros temas (merchant_order, etc.) → 200 y salir.
   if (!type.includes("payment") || !paymentId || !orgId) return NextResponse.json({ received: true });
+
+  // Verifica la firma HMAC si hay secreto configurado (defensa en profundidad; de
+  // base ya re-consultamos el pago real en MP). Firma presente pero inválida → 401.
+  const verdict = verifyMpSignature({
+    signatureHeader: req.headers.get("x-signature"),
+    requestId: req.headers.get("x-request-id"),
+    dataId: url.searchParams.get("data.id") || url.searchParams.get("id"),
+  });
+  if (verdict === "invalid") return NextResponse.json({ error: "firma inválida" }, { status: 401 });
 
   const sellerToken = await getSellerToken(orgId);
   if (!sellerToken) return NextResponse.json({ received: true }); // org sin MP → nada que hacer

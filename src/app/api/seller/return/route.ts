@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { processPayout } from "@/lib/resale/payout";
+import { rateLimit, clientIp } from "@/lib/rateLimit";
 
 export const runtime = "nodejs";
 
@@ -15,7 +16,12 @@ export async function GET(req: Request) {
   const token = url.searchParams.get("token");
   const db = createAdminClient();
 
-  if (email) {
+  // Endpoint sin sesión (vuelta del onboarding de Stripe): la identidad es la
+  // posesión del enlace. Rate-limit por IP para que no se use como gatillo masivo
+  // de llamadas a Stripe/payouts. Al excederse, igual redirige (el cron sincroniza).
+  const rl = await rateLimit({ key: `seller-return:${clientIp(req)}`, max: 12, windowSeconds: 60, db });
+
+  if (email && rl.ok) {
     const { data: acct } = await db.from("seller_accounts").select("stripe_account_id").eq("email", email).maybeSingle();
     if (acct?.stripe_account_id) {
       const account = await getStripe().accounts.retrieve(acct.stripe_account_id);
