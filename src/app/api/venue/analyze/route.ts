@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
-import { fetchWithTimeout } from "@/lib/http";
+import { fetchWithTimeout, assertPublicHttpUrl } from "@/lib/http";
 
 export const runtime = "nodejs";
 export const maxDuration = 60;
@@ -25,10 +25,17 @@ export async function POST(req: Request) {
   const { imageUrl, widthM, lengthM, totalChairs, unit } = body as { imageUrl?: string; widthM?: number; lengthM?: number; totalChairs?: number; unit?: string };
   if (!imageUrl) return NextResponse.json({ error: "falta imageUrl" }, { status: 400 });
 
-  // Descarga la imagen y la pasa como base64 (Claude vision).
+  // Descarga la imagen y la pasa como base64 (Claude vision). Valida la URL
+  // (anti-SSRF): rechaza loopback/metadata/rangos internos antes de solicitarla.
   let dataB64 = "", mediaType = "image/jpeg";
+  let safeUrl: string;
   try {
-    const r = await fetchWithTimeout(imageUrl, {}, 20_000);
+    safeUrl = await assertPublicHttpUrl(imageUrl);
+  } catch (e) {
+    return NextResponse.json({ error: (e as Error).message }, { status: 400 });
+  }
+  try {
+    const r = await fetchWithTimeout(safeUrl, {}, 20_000);
     if (!r.ok) throw new Error("no se pudo descargar la imagen");
     mediaType = r.headers.get("content-type") || "image/jpeg";
     if (!/^image\/(jpeg|png|webp|gif)$/.test(mediaType)) mediaType = "image/jpeg";
