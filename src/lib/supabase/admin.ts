@@ -1,5 +1,11 @@
 import { createClient } from "@supabase/supabase-js";
 
+// Defensa en profundidad: si este módulo (service_role, bypassa RLS) llegara a
+// ejecutarse en el navegador, abortamos. El código server nunca toca esta rama.
+if (typeof window !== "undefined") {
+  throw new Error("createAdminClient() es solo de servidor y no debe importarse en el cliente.");
+}
+
 /**
  * Cliente con service role — BYPASSEA RLS. Solo en servidor (webhooks, jobs).
  * Nunca lo importes en código que llegue al cliente.
