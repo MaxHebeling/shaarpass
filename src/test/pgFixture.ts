@@ -56,6 +56,9 @@ returns boolean language sql stable security definer set search_path = public as
 $$;
 grant execute on function public.is_org_member(uuid, text[]) to anon, authenticated, service_role;
 grant all on all tables in schema public to anon, authenticated, service_role;
+-- Igual que Supabase: todo lo que se cree después concede EXECUTE/ALL a anon y authenticated.
+alter default privileges in schema public grant execute on functions to anon, authenticated, service_role;
+alter default privileges in schema public grant all on tables to anon, authenticated, service_role;
 `;
 
 const MIGRATIONS_DIR = fileURLToPath(new URL("../../supabase/migrations/", import.meta.url));
