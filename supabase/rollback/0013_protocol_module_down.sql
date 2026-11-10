@@ -1,4 +1,4 @@
--- Reversión de 0013_protocol_module.sql — SOLO si se decide retirar el módulo.
+-- Reversión de 0013_protocol_module.sql (+ 0014, que solo revoca permisos) — SOLO si se decide retirar el módulo.
 -- Es no destructiva para el resto de la plataforma: elimina únicamente objetos
 -- `protocol_*` y `org_features`. Antes de ejecutarla, exporta los datos:
 --   copy (select * from public.protocol_people) to stdout with csv header;  (etc.)

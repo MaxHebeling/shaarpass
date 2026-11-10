@@ -41,7 +41,9 @@ beforeAll(async () => {
   other = (await one<{ id: string }>(`insert into organizations (slug, name) values ('soundwave','SoundWave') returning id`)).id;
   const { readFileSync } = await import("node:fs");
   const { fileURLToPath } = await import("node:url");
-  await db.exec(readFileSync(fileURLToPath(new URL("../../../supabase/migrations/0013_protocol_module.sql", import.meta.url)), "utf8"));
+  for (const f of ["0013_protocol_module.sql", "0014_protocol_revoke_rpc.sql"]) {
+    await db.exec(readFileSync(fileURLToPath(new URL(`../../../supabase/migrations/${f}`, import.meta.url)), "utf8"));
+  }
 
   await db.query(`insert into org_members values ($1,$2,'admin'),($1,$3,'staff'),($1,$4,'scanner'),($5,$6,'owner')`,
     [fdv, U.fdvAdmin, U.fdvStaff, U.fdvScanner, other, U.otherOwner]);
@@ -90,6 +92,15 @@ describe("aislamiento multitenant", () => {
     expect(await asUser(db, U.fdvStaff, () => count(tokens))).toBe(0);
     expect(await asUser(db, U.fdvAdmin, () => count(tokens))).toBeGreaterThan(0);
     await expect(asUser(db, null, () => count(people))).rejects.toThrow(/permission denied/);
+  });
+
+  it("anon y usuarios autenticados no pueden invocar las funciones del módulo (p. ej. obtener tokens)", async () => {
+    const o = await paidOrder(ev, tt, fdv, 1);
+    for (const who of [null, U.fdvAdmin, U.otherOwner]) {
+      await expect(asUser(db, who, () => db.query(`select protocol_sync_order($1)`, [o]))).rejects.toThrow(/permission denied/);
+      await expect(asUser(db, who, () => db.query(`select protocol_enabled_for_event($1)`, [ev]))).rejects.toThrow(/permission denied/);
+    }
+    await expect(asUser(db, null, () => db.query(`select org_has_feature($1,'protocol')`, [fdv]))).rejects.toThrow(/permission denied/);
   });
 
   it("RLS: ningún usuario autenticado escribe directo (solo el servidor)", async () => {
