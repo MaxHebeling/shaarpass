@@ -21,6 +21,8 @@ export interface SendTicketsParams {
   logoUrl?: string | null;
   brand?: string | null;
   whiteLabel?: boolean;
+  /** Enlace para registrar asistentes/acompañantes (solo eventos con módulo de Protocolo). */
+  attendeesUrl?: string | null;
 }
 
 /** Envía los boletos con QR por email (Resend). No-op si no hay key configurada. */
@@ -76,6 +78,12 @@ export async function sendTicketEmail(p: SendTicketsParams): Promise<{ sent: boo
     <h1 style="font-size:24px;margin:0 0 4px">🎟️ Tus boletos</h1>
     <p style="color:#9a9ab0;margin:0 0 12px">${p.eventTitle} · ${p.eventDate}</p>
     ${seeDesignHtml}
+    ${p.attendeesUrl ? `
+    <div style="border:1px solid #f5c451;border-radius:16px;padding:18px;margin:16px 0;background:#1a160a">
+      <div style="font-weight:700;font-size:15px;margin-bottom:6px">👥 Registra a quién usará cada boleto</div>
+      <div style="color:#c9c3a8;font-size:13px;margin-bottom:12px">Indica el nombre de cada asistente (tu esposa/o, líderes, familiares…). Puedes completarlo o cambiarlo después con este mismo enlace; no necesitas volver a comprar.</div>
+      <a href="${p.attendeesUrl}" style="display:inline-block;background:#f5c451;color:#08080c;font-weight:700;text-decoration:none;padding:11px 18px;border-radius:12px">Registrar asistentes</a>
+    </div>` : ""}
     ${ticketsHtml}
     <p style="color:#9a9ab0;font-size:13px;margin-top:20px">
       Total pagado: <strong style="color:#f5c451">${money(p.totalCents, p.currency)}</strong><br/>

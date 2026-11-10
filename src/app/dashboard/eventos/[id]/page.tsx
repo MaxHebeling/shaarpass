@@ -1,6 +1,6 @@
 import Link from "next/link";
 import { notFound } from "next/navigation";
-import { ArrowLeft, ExternalLink, BarChart3, Pencil, Ticket as TicketIcon, ShoppingBag, DoorOpen, Map as MapIcon, Megaphone, Download } from "lucide-react";
+import { ArrowLeft, ExternalLink, BarChart3, Pencil, Ticket as TicketIcon, ShoppingBag, DoorOpen, Map as MapIcon, Megaphone, Download, Users } from "lucide-react";
 import { DashboardTabs } from "@/components/dashboard/DashboardTabs";
 import { PublishToggle } from "@/components/dashboard/PublishToggle";
 import { formatDayRange } from "@/lib/datetime";
@@ -209,6 +209,12 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
     ? formatDayRange(eventDays[0].dayDate, eventDays[eventDays.length - 1].dayDate)
     : new Date(event.starts_at).toLocaleDateString("es-MX", { day: "numeric", month: "long", year: "numeric" });
 
+  // Módulo de Protocolo: solo organizaciones con el feature (RLS: lectura para miembros).
+  // Si la tabla no existe o no hay flag, `hasProtocol` es false y nada cambia.
+  const { data: protocolFlag } = await db.from("org_features").select("enabled")
+    .eq("org_id", event.org_id).eq("feature", "protocol").maybeSingle();
+  const hasProtocol = !!(protocolFlag as { enabled?: boolean } | null)?.enabled;
+
   // Venue y marca (para precargar el editor de Detalles).
   const venue = Array.isArray(event.venues) ? event.venues[0] : event.venues;
   const org = Array.isArray(event.organizations) ? event.organizations[0] : event.organizations;
@@ -230,6 +236,11 @@ export default async function EventManagePage({ params }: { params: Promise<{ id
           <p className="mt-1 text-sm text-muted">{dateRange}</p>
         </div>
         <div className="flex shrink-0 items-start gap-2">
+          {hasProtocol && (
+            <Link href={`/dashboard/eventos/${id}/protocolo`} className="flex shrink-0 items-center gap-1.5 rounded-full border border-gold/50 bg-gold/10 px-4 py-2 text-sm text-gold transition hover:bg-gold/20">
+              <Users className="h-3.5 w-3.5" /> Asistentes y protocolo
+            </Link>
+          )}
           {event.status === "published" && (
             <Link href={`/e/${event.slug}`} target="_blank" className="glass flex shrink-0 items-center gap-1.5 rounded-full px-4 py-2 text-sm transition hover:border-white/20">
               Ver página <ExternalLink className="h-3.5 w-3.5" />

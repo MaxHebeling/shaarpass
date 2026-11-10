@@ -347,3 +347,26 @@ describe("webhook — doble secreto", () => {
     expect(h.db.rpcCalls.some((c) => c.fn === "confirm_order_paid")).toBe(true);
   });
 });
+
+describe("webhook — módulo de Protocolo (enlace de asistentes)", () => {
+  it("evento SIN protocolo (otros tenants): el correo no incluye enlace — comportamiento idéntico", async () => {
+    // protocol_sync_order devuelve null cuando el evento/org no tiene el módulo.
+    setup({ rpc: { protocol_sync_order: { data: null } } });
+    expect((await post("firma-buena")).status).toBe(200);
+    expect(vi.mocked(sendTicketEmail).mock.calls[0][0].attendeesUrl).toBeNull();
+  });
+
+  it("evento CON protocolo: el correo incluye el enlace seguro de registro de asistentes", async () => {
+    const token = "a".repeat(64);
+    setup({ rpc: { protocol_sync_order: { data: token } } });
+    expect((await post("firma-buena")).status).toBe(200);
+    expect(vi.mocked(sendTicketEmail).mock.calls[0][0].attendeesUrl).toMatch(new RegExp(`/asistentes/${token}$`));
+  });
+
+  it("si el módulo falla (p. ej. migración no aplicada), la venta y el correo siguen igual", async () => {
+    setup({ rpc: { protocol_sync_order: { error: { message: "function does not exist" } } } });
+    expect((await post("firma-buena")).status).toBe(200);
+    expect(sendTicketEmail).toHaveBeenCalledTimes(1);
+    expect(vi.mocked(sendTicketEmail).mock.calls[0][0].attendeesUrl).toBeNull();
+  });
+});

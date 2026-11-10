@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { resolveCurrentDay } from "@/lib/ticketing/eventDay";
+import { checkinProtocolDetail } from "@/lib/protocol/checkin";
 
 export const runtime = "nodejs";
 
@@ -54,10 +55,13 @@ export async function POST(req: Request) {
   const at = ticket.attendees as unknown as { first_name: string | null; last_name: string | null } | null;
   const ord = ticket.orders as unknown as { buyer_name: string | null } | null;
   const who = [at?.first_name, at?.last_name].filter(Boolean).join(" ") || ord?.buyer_name || null;
+  // Protocolo (solo eventos con el módulo activo): acceso/brazalete/mesa para recepción.
+  const detail = await checkinProtocolDetail(db, ticket.id, sess.event_id);
+  const extra = detail ? { detail } : {};
 
   // Boleto anulado o reembolsado → no entra.
   if (ticket.status === "void" || ticket.status === "refunded") {
-    return NextResponse.json({ result: "already" as Result, message: `Boleto ${ticket.status}`, attendee: who, type: tt?.name });
+    return NextResponse.json({ result: "already" as Result, message: `Boleto ${ticket.status}`, attendee: who, type: tt?.name, ...extra });
   }
 
   // 4) Día del evento al que aplica el escaneo (acceso POR DÍA).
@@ -77,7 +81,7 @@ export async function POST(req: Request) {
     .insert({ ticket_id: ticket.id, event_day_id: chosen.id, event_id: sess.event_id, checked_in_by_staff: sess.staff_id, gate: sess.gate });
   if (insErr) {
     if ((insErr as { code?: string }).code === "23505") {
-      return NextResponse.json({ result: "already" as Result, message: dayLabel ? `Ya registrado (${dayLabel})` : "Este boleto ya fue utilizado", attendee: who, type: tt?.name });
+      return NextResponse.json({ result: "already" as Result, message: dayLabel ? `Ya registrado (${dayLabel})` : "Este boleto ya fue utilizado", attendee: who, type: tt?.name, ...extra });
     }
     return NextResponse.json({ result: "invalid" as Result, message: "No se pudo registrar el acceso", attendee: who, type: tt?.name }, { status: 500 });
   }
@@ -87,5 +91,5 @@ export async function POST(req: Request) {
   await db.from("checkin_log").insert({ event_id: sess.event_id, ticket_id: ticket.id, staff_id: sess.staff_id, gate: sess.gate });
   await db.rpc("bump_staff_activity", { p_staff: sess.staff_id }).then(undefined, () => {});
 
-  return NextResponse.json({ result: "ok" as Result, message: dayLabel ? `¡Bienvenido! (${dayLabel})` : "¡Bienvenido!", attendee: who, type: tt?.name, at: nowIso, gate: sess.gate });
+  return NextResponse.json({ result: "ok" as Result, message: dayLabel ? `¡Bienvenido! (${dayLabel})` : "¡Bienvenido!", attendee: who, type: tt?.name, at: nowIso, gate: sess.gate, ...extra });
 }

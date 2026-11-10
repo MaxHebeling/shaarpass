@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTicketEmail } from "@/lib/email/tickets";
+import { attendeesLinkForOrder } from "@/lib/protocol/data";
 import { getSellerToken, getPayment } from "@/lib/mp/client";
 import { verifyMpSignature } from "@/lib/mp/webhook";
 
@@ -67,6 +68,7 @@ async function handle(req: Request): Promise<NextResponse> {
         currency: order.currency, totalCents: order.total_cents, safetix: ev?.safetix_enabled,
         logoUrl: og?.logo_url ?? null, brand: og?.name ?? null, whiteLabel: og?.white_label ?? false,
         tickets: tks.map((t) => ({ qr_token: t.qr_token, typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto" })),
+        attendeesUrl: await attendeesLinkForOrder(db, orderId),
       });
       try {
         const { sendWelcome } = await import("@/lib/email/campaignSend");
