@@ -313,6 +313,7 @@ export async function POST(req: Request) {
           currency: o.currency, totalCents: o.total_cents, safetix: ev?.safetix_enabled,
           logoUrl: og?.logo_url ?? null, brand: og?.name ?? null, whiteLabel: og?.white_label ?? false,
           tickets: tks.map((t) => ({ qr_token: t.qr_token, typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto" })),
+          attendeesUrl: await (await import("@/lib/protocol/data")).attendeesLinkForOrder(db, order.id),
         });
       }
     } catch { /* best-effort */ }

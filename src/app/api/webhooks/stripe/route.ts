@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getStripe } from "@/lib/stripe/client";
 import { createAdminClient } from "@/lib/supabase/admin";
 import { sendTicketEmail } from "@/lib/email/tickets";
+import { attendeesLinkForOrder } from "@/lib/protocol/data";
 import { OXXO_EXPIRES_AFTER_DAYS, SPEI_EXPIRES_AFTER_DAYS } from "@/lib/stripe/paymentMethods";
 import type Stripe from "stripe";
 
@@ -77,6 +78,7 @@ async function fulfillOrder(db: ReturnType<typeof createAdminClient>, orderId: s
       brand: org?.name ?? null,
       whiteLabel: org?.white_label ?? false,
       tickets: tks.map((t) => ({ qr_token: t.qr_token, typeName: (t.ticket_types as unknown as { name: string } | null)?.name ?? "Boleto" })),
+      attendeesUrl: await attendeesLinkForOrder(db, orderId),
     });
     try {
       const { sendWelcome } = await import("@/lib/email/campaignSend");

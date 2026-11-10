@@ -25,7 +25,7 @@ function InstallButton() {
 }
 
 interface EventInfo { title: string; coverImage: string | null; startsAt: string; timezone: string; city: string | null; region: string | null; isOnline: boolean; }
-interface ScanResult { result: "ok" | "already" | "invalid" | "pending"; message: string; attendee?: string | null; type?: string | null; at?: string | null; gate?: string | null; }
+interface ScanResult { result: "ok" | "already" | "invalid" | "pending"; message: string; attendee?: string | null; type?: string | null; at?: string | null; gate?: string | null; detail?: string | null; }
 interface QueuedScan { token: string; manual: boolean; at: string; }
 interface Stats { registered: number; checkedIn: number; pending: number; total: number; }
 interface SearchHit { qrToken: string; name: string; type: string; status: string; }
@@ -269,6 +269,7 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
             <div className="mt-5 font-display text-3xl font-bold">{result.message}</div>
             {result.attendee && <div className="mt-2 text-xl font-medium">{result.attendee}</div>}
             {result.type && <div className="mt-1 text-base text-white/85">{result.type}</div>}
+            {result.detail && <div className="mt-2 rounded-full bg-black/20 px-4 py-1.5 text-base font-medium">{result.detail}</div>}
             {result.at && <div className="mt-3 text-sm text-white/80">{result.result === "already" ? "Ingreso previo: " : "Hora: "}{new Date(result.at).toLocaleTimeString("es-MX")}{result.gate ? ` · ${result.gate}` : ""}</div>}
           </motion.div>
         )}
