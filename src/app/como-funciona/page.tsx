@@ -7,7 +7,7 @@ import { Footer } from "@/components/landing/Footer";
 export const metadata: Metadata = {
   title: "Cómo funciona ShaarPass — Vende boletos en minutos",
   description:
-    "Crea tu cuenta, conecta tu cobro y publica tu evento en minutos. Así funciona ShaarPass para organizadores y para quienes compran boletos: QR seguro, pagos el mismo día y check-in sin internet.",
+    "Crea tu cuenta, conecta tu cobro y publica tu evento en minutos. Así funciona ShaarPass para organizadores y para quienes compran boletos: QR seguro, cobro directo a tu cuenta y check-in sin internet.",
   alternates: { canonical: "/como-funciona" },
 };
 
@@ -17,7 +17,7 @@ const organizer = [
   { icon: CalendarPlus, title: "Publica tu evento", body: "Defines tipos de boleto, precios y fecha en minutos. Publicar es gratis." },
   { icon: Share2, title: "Comparte y vende", body: "Compartes el link de tu evento. También aparece en Descubrir y en búsquedas." },
   { icon: ScanLine, title: "Recibe a tu público", body: "Escaneas el QR desde el teléfono, incluso sin internet. Sincroniza al reconectar." },
-  { icon: Banknote, title: "Cobra al instante", body: "El dinero llega a tu cuenta el mismo día. Sin retenciones del 20%." },
+  { icon: Banknote, title: "Cobra directo", body: "Cada venta cae en tu propia cuenta, sin esperar al evento. Sin retenciones del 20%." },
 ];
 
 const attendee = [

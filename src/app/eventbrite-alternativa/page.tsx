@@ -7,7 +7,7 @@ import { Footer } from "@/components/landing/Footer";
 export const metadata: Metadata = {
   title: "La alternativa a Eventbrite en español — ShaarPass",
   description:
-    "ShaarPass es la alternativa a Eventbrite con la comisión más baja y transparente (2% + $0.50), pagos el mismo día, soporte humano en español y boletos con QR anti-reventa. Compara y cámbiate.",
+    "ShaarPass es la alternativa a Eventbrite con la comisión más baja y transparente (2% + $0.50), cobro directo a tu cuenta, soporte humano en español y boletos con QR anti-reventa. Compara y cámbiate.",
   alternates: { canonical: "/eventbrite-alternativa" },
 };
 
@@ -16,7 +16,7 @@ const rows: { label: string; shaar: boolean | string; eb: boolean | string }[] =
   { label: "Comisión por boleto", shaar: "2% + $0.50", eb: "~6.99% + IVA" },
   { label: "Comisión visible antes de pagar", shaar: true, eb: "Parcial" },
   { label: "Eventos gratuitos sin comisión", shaar: true, eb: "Variable" },
-  { label: "Pagos a tu cuenta el mismo día", shaar: true, eb: false },
+  { label: "Cobras directo en tu cuenta, antes del evento", shaar: true, eb: false },
   { label: "Soporte humano en español", shaar: true, eb: false },
   { label: "QR seguro que rota (anti-reventa)", shaar: true, eb: false },
   { label: "Reventa topada al precio original", shaar: true, eb: false },
@@ -27,7 +27,7 @@ const rows: { label: string; shaar: boolean | string; eb: boolean | string }[] =
 const faqs = [
   { q: "¿ShaarPass es más barato que Eventbrite?", a: "Sí. ShaarPass cobra 2% + $0.50 por boleto más el procesamiento de pago, mientras que Eventbrite cobra alrededor de 6.99% + IVA por boleto pagado. En la mayoría de los eventos te quedas con más dinero con ShaarPass, y los eventos gratuitos no pagan comisión." },
   { q: "¿Puedo migrar mi evento de Eventbrite a ShaarPass?", a: "Sí. Creas tu evento en ShaarPass en minutos, defines tus boletos y precios, conectas tu cuenta de cobro y compartes tu nuevo enlace. Si quieres, te ayudamos a montarlo." },
-  { q: "¿Cuándo recibo el dinero de mis ventas?", a: "El dinero de tus ventas llega a tu propia cuenta de Stripe el mismo día, no semanas después del evento. ShaarPass no retiene un porcentaje de tus ventas." },
+  { q: "¿Cuándo recibo el dinero de mis ventas?", a: "Cada venta se cobra directo en tu propia cuenta de Stripe o Mercado Pago, no después del evento. El depósito a tu banco sigue los tiempos de tu pasarela (con Stripe, el primero suele tardar de 7 a 14 días; después, unos días hábiles). ShaarPass no retiene un porcentaje de tus ventas." },
   { q: "¿ShaarPass funciona en México y para eventos en español?", a: "Sí. ShaarPass está hecho en español, soporta monedas como el peso mexicano y está pensado para organizadores en México y Latinoamérica: iglesias, conferencias, conciertos y eventos locales." },
 ];
 
@@ -53,7 +53,7 @@ export default function EventbriteAlternativaPage() {
           </h1>
           <p className="mx-auto mt-6 max-w-2xl text-lg leading-relaxed text-muted">
             ShaarPass es una plataforma para vender boletos pensada para que <strong className="text-fg">te
-            quedes con más de cada venta</strong>: comisión baja y transparente, pagos el mismo día, soporte
+            quedes con más de cada venta</strong>: comisión baja y transparente, cobro directo a tu cuenta, soporte
             humano en español y boletos con QR seguro. Si Eventbrite se queda con demasiado de tu evento, esta
             es tu salida.
           </p>
@@ -96,7 +96,7 @@ export default function EventbriteAlternativaPage() {
           <H>Por qué los organizadores se cambian</H>
           <div className="mt-6 space-y-4 text-[15px] leading-relaxed text-muted">
             <p><strong className="text-fg">Te quedas con más.</strong> En un evento de 200 boletos a $250, la diferencia entre una comisión de ~7% y una de 2% + $0.50 son cientos o miles de pesos que se quedan en tu bolsa, no en la plataforma.</p>
-            <p><strong className="text-fg">Cobras el mismo día.</strong> No esperas a que termine el evento ni a un calendario de pagos: el dinero llega a tu cuenta de inmediato.</p>
+            <p><strong className="text-fg">Cobras directo en tu cuenta.</strong> No esperas a que termine el evento: cada venta cae en tu propia cuenta de Stripe o Mercado Pago, y el depósito a tu banco sigue los tiempos de tu pasarela.</p>
             <p><strong className="text-fg">Te contesta una persona.</strong> Soporte real en español, antes y durante tu evento — no un bot que te manda a un artículo de ayuda.</p>
             <p><strong className="text-fg">Proteges a tu público.</strong> QR seguro que rota cada 15 segundos y reventa topada al precio original: sin clonaciones ni coyotaje.</p>
           </div>

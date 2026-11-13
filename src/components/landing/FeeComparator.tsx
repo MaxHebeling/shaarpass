@@ -22,7 +22,7 @@ import {
  * que paga el comprador (nuestro margen + el procesamiento de la pasarela, que
  * trasladamos tal cual) y lo comparamos con la tarifa PUBLICADA de Eventbrite
  * México — salga a favor o en contra. Donde ganamos siempre es en lo que recibe
- * el organizador: el 100% del precio del boleto, el mismo día.
+ * el organizador: el 100% del precio del boleto, directo en su cuenta.
  */
 export function FeeComparator() {
   const [price, setPrice] = useState(250); // pesos
@@ -87,7 +87,7 @@ export function FeeComparator() {
               </div>
               <div className="mt-1 font-display text-5xl font-bold tracking-tight">{fmt(m.subtotal)}</div>
               <div className="mt-1 text-sm font-medium opacity-80">
-                El 100% del precio de tus boletos · en tu cuenta el mismo día
+                El 100% del precio de tus boletos · directo en tu cuenta
               </div>
             </motion.div>
 
@@ -118,7 +118,7 @@ export function FeeComparator() {
                   <>
                     A este precio tu comprador paga <span className="font-semibold text-fg">{fmt(-m.diff)} más</span> con nosotros:
                     su {EVENTBRITE_MX_PROCESSING_PCT}% de procesamiento es interno y no cubre el costo real de la pasarela.
-                    La diferencia se empareja en boletos de mayor precio — y a cambio recibes tu dinero el mismo día,
+                    La diferencia se empareja en boletos de mayor precio — y a cambio cobras directo en tu cuenta, antes del evento,
                     con el desglose a la vista y la reventa topada al precio original.
                   </>
                 )}

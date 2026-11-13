@@ -4,7 +4,7 @@ import { motion } from "motion/react";
 
 const stats = [
   { big: "2% + $0.50", small: "comisión + procesamiento. Transparente." },
-  { big: "Mismo día", small: "para recibir tu dinero" },
+  { big: "Directo", small: "a tu cuenta, antes del evento" },
   { big: "0%", small: "de retención sobre tus ventas" },
   { big: "100%", small: "soporte por humanos reales" },
 ];

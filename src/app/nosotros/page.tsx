@@ -7,13 +7,13 @@ import { Footer } from "@/components/landing/Footer";
 export const metadata: Metadata = {
   title: "Sobre ShaarPass — Boletos con comisiones justas y transparentes",
   description:
-    "ShaarPass nació para acabar con los fees abusivos y opacos en la venta de boletos. Comisiones bajas y claras, pagos el mismo día y soporte humano real. Conoce nuestra misión y cómo trabajamos.",
+    "ShaarPass nació para acabar con los fees abusivos y opacos en la venta de boletos. Comisiones bajas y claras, cobro directo a tu cuenta y soporte humano real. Conoce nuestra misión y cómo trabajamos.",
   alternates: { canonical: "/nosotros" },
 };
 
 const values = [
   { icon: Eye, title: "Transparencia primero", body: "Verás cada comisión antes de publicar y tu comprador la verá antes de pagar. Nada de cargos sorpresa al final." },
-  { icon: Zap, title: "Tu dinero, rápido", body: "Las ventas llegan a tu cuenta el mismo día, no semanas después del evento. No retenemos un porcentaje de tus ventas." },
+  { icon: Zap, title: "Tu dinero, rápido", body: "Las ventas caen directo en tu propia cuenta, no semanas después del evento. No retenemos un porcentaje de tus ventas." },
   { icon: ShieldCheck, title: "Sin reventa abusiva", body: "La reventa entre fans está topada al precio original. Protegemos a tu público del scalping." },
   { icon: HeartHandshake, title: "Soporte de personas", body: "Cuando algo importa, hablas con un humano, no con un bot que da vueltas." },
 ];
@@ -41,7 +41,7 @@ export default function NosotrosPage() {
             <p className="mt-3 leading-relaxed text-muted">
               Que cualquier persona —desde una iglesia o un colectivo local hasta un promotor de conciertos— pueda
               vender entradas con la <strong className="text-fg">comisión más baja y transparente del mercado</strong>,
-              cobrar a su propia cuenta de inmediato y dar a su público una experiencia segura y sin fricción.
+              cobrar directo a su propia cuenta y dar a su público una experiencia segura y sin fricción.
               Creemos que la tecnología de una gran ticketera debería estar al alcance de todos, sin sus abusos.
             </p>
           </div>
