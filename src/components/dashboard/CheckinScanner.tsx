@@ -78,7 +78,8 @@ export function CheckinScanner({ events }: { events: ScannerEvent[] }) {
     })();
     return () => {
       cancelled = true;
-      scanner?.stop().catch(() => {});
+      // html5-qrcode lanza de forma síncrona si la cámara nunca arrancó.
+      try { scanner?.stop().catch(() => {}); } catch { /* no estaba corriendo */ }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
