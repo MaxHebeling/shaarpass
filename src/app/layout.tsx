@@ -12,10 +12,10 @@ export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
   title: "ShaarPass — Vende boletos con la comisión más baja y transparente",
   description:
-    "La plataforma de eventos donde te quedas con más de cada boleto. Fees bajos y claros, pagos al instante, sin letra chica. La alternativa premium a Eventbrite.",
+    "La plataforma de eventos donde te quedas con más de cada boleto. Fees bajos y claros, cobro directo a tu cuenta, sin letra chica. La alternativa premium a Eventbrite.",
   openGraph: {
     title: "ShaarPass — Te quedas con más de cada boleto",
-    description: "Fees bajos y transparentes. Pagos al instante. La alternativa premium a Eventbrite.",
+    description: "Fees bajos y transparentes. Cobro directo a tu cuenta. La alternativa premium a Eventbrite.",
     type: "website",
     url: SITE_URL,
     siteName: "ShaarPass",
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "ShaarPass — Te quedas con más de cada boleto",
-    description: "Fees bajos y transparentes. Pagos al instante. La alternativa premium a Eventbrite.",
+    description: "Fees bajos y transparentes. Cobro directo a tu cuenta. La alternativa premium a Eventbrite.",
     images: ["/og.jpg"],
   },
   manifest: "/manifest.webmanifest",

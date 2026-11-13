@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { createClient } from "@/lib/supabase/server";
-import { getStripe } from "@/lib/stripe/client";
+import { refundOrderPayment } from "@/lib/payments/refund";
 
 export const runtime = "nodejs";
 
@@ -18,19 +18,18 @@ export async function POST(req: Request) {
   // RLS: solo miembros del org ven la orden.
   const { data: order } = await db
     .from("orders")
-    .select("id, status, stripe_payment_intent_id, event_id, events(title)")
+    .select("id, status, org_id, stripe_payment_intent_id, event_id, events(title), organizations(stripe_account_id)")
     .eq("id", parsed.data.orderId)
     .maybeSingle();
   if (!order) return NextResponse.json({ error: "Orden no encontrada o sin permiso" }, { status: 404 });
   if (order.status === "refunded") return NextResponse.json({ ok: true, already: true });
 
   // 1) Reembolso en Stripe (si fue un pago real). Órdenes comp/seed no tienen PI.
+  //    Se crea en la pasarela/cuenta donde vive el cargo (Stripe directo del organizador o Mercado Pago).
   if (order.status === "paid" && order.stripe_payment_intent_id) {
-    try {
-      await getStripe().refunds.create({ payment_intent: order.stripe_payment_intent_id });
-    } catch (e) {
-      return NextResponse.json({ error: `Error de Stripe: ${(e as Error).message}` }, { status: 502 });
-    }
+    const org = order.organizations as unknown as { stripe_account_id: string | null } | null;
+    const r = await refundOrderPayment({ paymentId: order.stripe_payment_intent_id, stripeAccountId: org?.stripe_account_id, orgId: order.org_id });
+    if (!r.ok) return NextResponse.json({ error: r.error }, { status: 502 });
   }
 
   // 2) Devuelve inventario, anula boletos, marca refunded (authz interna en la RPC).

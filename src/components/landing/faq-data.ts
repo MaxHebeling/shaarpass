@@ -7,7 +7,7 @@ export const faqs = [
   },
   {
     q: "¿Cuándo recibo mi dinero?",
-    a: "El dinero de tus ventas llega a tu propia cuenta de Stripe el mismo día, no semanas después del evento. No retenemos un porcentaje de tus ventas.",
+    a: "Cada venta se cobra directo en tu propia cuenta de Stripe o Mercado Pago, no después del evento. El depósito a tu banco sigue los tiempos de tu pasarela: con Stripe, el primero suele tardar de 7 a 14 días y después llegan a los pocos días hábiles; con Mercado Pago puedes elegir recibirlo al instante (con una comisión de Mercado Pago más alta). ShaarPass no retiene un porcentaje de tus ventas.",
   },
   {
     q: "¿Necesito conocimientos técnicos?",

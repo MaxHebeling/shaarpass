@@ -83,7 +83,7 @@ export default async function BlogPost({ params }: { params: Promise<{ slug: str
           {/* CTA */}
           <div className="glass ring-grad mt-12 rounded-3xl p-7 text-center">
             <div className="font-display text-xl font-semibold">Publica tu evento gratis</div>
-            <p className="mt-1 text-sm text-muted">Comisión más baja, pagos el mismo día y soporte humano.</p>
+            <p className="mt-1 text-sm text-muted">Comisión más baja, cobro directo a tu cuenta y soporte humano.</p>
             <Link href="/login" className="brand-gradient mt-5 inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-semibold text-ink transition hover:scale-[1.03]">
               Crear mi evento <ArrowRight className="h-4 w-4" />
             </Link>

@@ -8,14 +8,14 @@ import { FeeComparator } from "@/components/landing/FeeComparator";
 export const metadata: Metadata = {
   title: "Precios y comisiones — ShaarPass | Vender boletos en México sin letra chica",
   description:
-    "2% + $0.50 MXN por boleto, más el procesamiento de la pasarela trasladado al costo. Recibes el 100% del precio el mismo día, eventos gratis sin comisión y reventa topada. Calcula tu caso en pesos.",
+    "2% + $0.50 MXN por boleto, más el procesamiento de la pasarela trasladado al costo. Recibes el 100% del precio directo en tu cuenta, eventos gratis sin comisión y reventa topada. Calcula tu caso en pesos.",
   alternates: { canonical: "/precios" },
 };
 
 const included = [
   "Página de evento lista para vender",
   "Boletos con QR seguro (rota cada 15s)",
-  "Pagos a tu cuenta el mismo día",
+  "Cobro directo a tu cuenta, antes del evento",
   "Check-in desde el teléfono, incluso sin internet",
   "Cola virtual y anti-bot para alta demanda",
   "Mapas de recinto y asientos numerados",
@@ -30,7 +30,7 @@ const rows: { label: string; shaar: string; eb: string; tm: string }[] = [
   { label: "Procesamiento de pago", shaar: "Al costo (3.6% + $3), sin margen encima", eb: "2% propio", tm: "Opaco" },
   { label: "Transparencia del fee", shaar: "Desglosado antes de pagar", eb: "Parcial", tm: "Cargos ocultos" },
   { label: "Eventos gratuitos", shaar: "$0", eb: "Sin comisión", tm: "—" },
-  { label: "Recibes tu dinero", shaar: "Mismo día", eb: "Tras el evento", tm: "Tras el evento" },
+  { label: "Recibes tu dinero", shaar: "Directo en tu cuenta, antes del evento", eb: "Tras el evento", tm: "Tras el evento" },
   { label: "Anti-reventa abusiva", shaar: "Sí (tope al precio original)", eb: "Limitado", tm: "Cobra en ambos lados" },
   { label: "Soporte humano", shaar: "Sí", eb: "Difícil", tm: "Difícil" },
 ];
@@ -51,7 +51,7 @@ export default function PreciosPage() {
             Cobramos <strong className="text-fg">2% + $0.50 MXN por boleto</strong>. El procesamiento de pago
             lo cobra la pasarela y te lo trasladamos <strong className="text-fg">al costo, sin margen encima</strong> —
             desglosado antes de publicar. Tú recibes el <strong className="text-fg">100% del precio de tu boleto,
-            el mismo día</strong>. Los eventos gratuitos no pagan comisión.
+            directo en tu cuenta</strong>. Los eventos gratuitos no pagan comisión.
           </p>
           <Link href="/login" className="brand-gradient group mt-8 inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-semibold text-ink shadow-xl shadow-fuchsia/30 transition hover:scale-[1.03]">
             Crea tu evento gratis <ArrowRight className="h-4 w-4 transition group-hover:translate-x-1" />

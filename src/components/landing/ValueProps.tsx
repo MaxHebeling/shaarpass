@@ -5,7 +5,7 @@ import { Wallet, Zap, ShieldCheck, QrCode, BarChart3, HeartHandshake } from "luc
 
 const items = [
   { icon: Wallet, title: "Fees bajos y transparentes", body: "2% + $0.50 por boleto. Lo ves antes de publicar. Sin cargos ocultos al cobrar." },
-  { icon: Zap, title: "Pagos al instante", body: "Tu dinero el mismo día, no semanas después del evento. Sin retenciones del 20%." },
+  { icon: Zap, title: "Cobro directo", body: "Cada venta cae en tu propia cuenta, no semanas después del evento. Sin retenciones del 20%." },
   { icon: ShieldCheck, title: "Inventario blindado", body: "Imposible sobrevender. Cada boleto está garantizado a nivel de base de datos." },
   { icon: QrCode, title: "Check-in en segundos", body: "Escanea QR desde el teléfono, incluso sin internet. Sincroniza al reconectar." },
   { icon: BarChart3, title: "Ventas en tiempo real", body: "Dashboard con ventas, asistencia y check-ins en vivo durante tu evento." },

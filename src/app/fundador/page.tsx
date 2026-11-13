@@ -8,14 +8,14 @@ import { LeadForm } from "@/components/marketing/LeadForm";
 export const metadata: Metadata = {
   title: "Organizador Fundador — ShaarPass | Te montamos tu primer evento",
   description:
-    "Sé uno de los primeros organizadores de ShaarPass: te montamos tu primer evento sin costo, la comisión más baja y transparente, pagos el mismo día y soporte directo. Cupos limitados.",
+    "Sé uno de los primeros organizadores de ShaarPass: te montamos tu primer evento sin costo, la comisión más baja y transparente, cobro directo a tu cuenta y soporte directo. Cupos limitados.",
   alternates: { canonical: "/fundador" },
 };
 
 const perks = [
   { icon: HandHelping, title: "Te montamos tu primer evento", body: "Sin costo de nuestra parte. Tú nos das los datos y nosotros lo dejamos listo para vender." },
   { icon: Wallet, title: "La comisión más baja", body: "2% + $0.50 por boleto, transparente. Y los eventos gratuitos no pagan nada." },
-  { icon: Zap, title: "Tu dinero el mismo día", body: "Las ventas caen en tu propia cuenta de Stripe sin retenciones ni esperas." },
+  { icon: Zap, title: "Cobro directo a tu cuenta", body: "Las ventas caen en tu propia cuenta de Stripe o Mercado Pago, sin retenciones de ShaarPass ni esperar al evento." },
   { icon: MessageCircle, title: "Soporte directo", body: "Hablas con una persona por WhatsApp, no con un bot. Te acompañamos el día del evento." },
   { icon: BadgeCheck, title: "Insignia de Fundador", body: "Tu organización aparece como Organizador Fundador y con prioridad en Descubrir." },
 ];

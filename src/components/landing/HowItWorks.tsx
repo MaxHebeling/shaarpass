@@ -5,7 +5,7 @@ import { motion } from "motion/react";
 const steps = [
   { n: "01", title: "Crea tu evento", body: "Sube tu evento, define tipos de boleto y precios en minutos. Publicar es gratis." },
   { n: "02", title: "Comparte y vende", body: "Tu página de evento lista para vender. Comparte el link y empieza a cobrar." },
-  { n: "03", title: "Cobra al instante", body: "El dinero llega a tu cuenta el mismo día. Tú te quedas con casi todo." },
+  { n: "03", title: "Cobra directo", body: "Cada venta cae en tu propia cuenta, sin esperar al evento. Tú te quedas con casi todo." },
 ];
 
 export function HowItWorks() {

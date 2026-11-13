@@ -91,7 +91,7 @@ export function Hero() {
             variants={fadeUp} custom={4} initial="hidden" animate="show"
             className="mt-10 flex flex-wrap items-center justify-center gap-x-7 gap-y-3 text-sm text-muted lg:justify-start"
           >
-            <span className="flex items-center gap-2"><Zap className="h-4 w-4 text-gold" /> Pagos al instante</span>
+            <span className="flex items-center gap-2"><Zap className="h-4 w-4 text-gold" /> Cobro directo a tu cuenta</span>
             <span className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-gold" /> Anti-reventa de boletos</span>
             <span className="flex items-center gap-2"><Sparkles className="h-4 w-4 text-gold" /> Soporte humano real</span>
           </motion.div>

@@ -24,7 +24,7 @@ function buildIntro(geoName: string, catName: string | null, categorySlug?: stri
     const kinds = CAT_INTRO[categorySlug] ?? `${catName.toLowerCase()} y más`;
     return `¿Buscas ${catName.toLowerCase()} en ${geoName}? Aquí encuentras ${kinds} con boletos a la venta, todo en un solo lugar. Compra con código QR seguro y paga en línea sin complicaciones. Los organizadores de ${geoName} eligen ShaarPass para vender entradas de ${catName.toLowerCase()} con la comisión más baja y transparente del mercado: 2% + $0.50 por boleto, sin cargos ocultos. Si organizas un evento de ${catName.toLowerCase()} en ${geoName}, publícalo gratis y empieza a vender en minutos.`;
   }
-  return `Descubre los próximos eventos en ${geoName}: conciertos, conferencias, eventos de iglesia, teatro, deportes y más. Compra tus boletos con código QR seguro y la comisión más baja del mercado. ¿Organizas eventos en ${geoName}? Con ShaarPass publicas gratis, cobras a tu cuenta el mismo día y te quedas con más de cada boleto — sin la letra chica de otras plataformas.`;
+  return `Descubre los próximos eventos en ${geoName}: conciertos, conferencias, eventos de iglesia, teatro, deportes y más. Compra tus boletos con código QR seguro y la comisión más baja del mercado. ¿Organizas eventos en ${geoName}? Con ShaarPass publicas gratis, cobras directo a tu cuenta y te quedas con más de cada boleto — sin la letra chica de otras plataformas.`;
 }
 
 function filterEvents(events: EventCardData[], geoSlug: string, categorySlug?: string) {
