@@ -2,9 +2,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Loader2, RotateCcw, Ban, Download, Trash2 } from "lucide-react";
+import { Loader2, RotateCcw, Ban, Download, Printer, Trash2 } from "lucide-react";
 import { money } from "@/lib/money";
 import { deleteOrder } from "@/app/dashboard/actions";
+import { FILTER_LABEL, matchesStatus, norm, type StatusFilter } from "@/lib/reports/buyersReport";
 
 export interface OrderRow {
   id: string;
@@ -18,21 +19,6 @@ export interface OrderRow {
   created_at: string;
 }
 
-function exportCSV(orders: OrderRow[], currency: string) {
-  const head = ["Nombre", "Correo", "WhatsApp", "Ciudad", "País", "Estado", "Total", "Fecha"];
-  const esc = (v: string) => `"${(v ?? "").replace(/"/g, '""')}"`;
-  const rows = orders.map((o) => [
-    o.buyer_name ?? "", o.buyer_email, o.buyer_phone ?? "", o.buyer_city ?? "", o.buyer_country ?? "",
-    o.status, (o.total_cents / 100).toFixed(2) + " " + currency.toUpperCase(),
-    new Date(o.created_at).toISOString().slice(0, 10),
-  ].map((c) => esc(String(c))).join(","));
-  const csv = [head.join(","), ...rows].join("\n");
-  const url = URL.createObjectURL(new Blob(["﻿" + csv], { type: "text/csv;charset=utf-8" }));
-  const a = document.createElement("a");
-  a.href = url; a.download = "registrados.csv"; a.click();
-  URL.revokeObjectURL(url);
-}
-
 export function OrdersPanel({
   eventId, currency, cancelled, initial,
 }: { eventId: string; currency: string; cancelled: boolean; initial: OrderRow[] }) {
@@ -40,6 +26,8 @@ export function OrdersPanel({
   const [busy, setBusy] = useState<string | null>(null);
   const [canceling, setCanceling] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<StatusFilter>("all");
+  const [query, setQuery] = useState("");
   const router = useRouter();
 
   async function refund(id: string) {
@@ -89,16 +77,30 @@ export function OrdersPanel({
 
   const paid = orders.filter((o) => o.status === "paid").length;
 
+  // Mismos filtros que aplica el servidor al exportar (lib/reports/buyersReport).
+  const q = norm(query);
+  const visible = orders.filter((o) => matchesStatus(o.status, statusFilter) &&
+    (!q || [o.buyer_name, o.buyer_email, o.buyer_phone, o.id.replace(/-/g, "").slice(0, 8)].some((v) => norm(v).includes(q))));
+  const exportQs = new URLSearchParams({ status: statusFilter, ...(query.trim() ? { q: query.trim() } : {}) }).toString();
+  const reportUrl = `/api/dashboard/events/${eventId}/report?${exportQs}`;
+
   return (
     <div className="glass rounded-3xl p-6">
       <div className="mb-4 flex flex-wrap items-center justify-between gap-3">
         <h2 className="font-display text-lg font-semibold">Órdenes y registrados</h2>
         <div className="flex items-center gap-2">
         {orders.length > 0 && (
-          <button onClick={() => exportCSV(orders, currency)}
-            className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium transition hover:border-white/20">
-            <Download className="h-4 w-4" /> Exportar CSV
-          </button>
+          <>
+            <a href={reportUrl} download
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium transition hover:border-white/20">
+              <Download className="h-4 w-4" /> Exportar a Excel
+            </a>
+            <a href={`${reportUrl}&view=print`} download
+              title="Lista de compras pagadas para imprimir y controlar la entrada"
+              className="flex items-center gap-2 rounded-full border border-line px-4 py-2 text-sm font-medium transition hover:border-white/20">
+              <Printer className="h-4 w-4" /> Lista para imprimir
+            </a>
+          </>
         )}
         {!cancelled && (
           <button
@@ -115,11 +117,31 @@ export function OrdersPanel({
 
       {error && <p className="mb-3 text-sm text-fuchsia">{error}</p>}
 
+      {orders.length > 0 && (
+        <div className="mb-4 flex flex-wrap items-center gap-2">
+          <select
+            value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as StatusFilter)}
+            aria-label="Filtrar por estado del pago"
+            className="rounded-full border border-line bg-surface/40 px-3 py-2 text-sm"
+          >
+            {(Object.keys(FILTER_LABEL) as StatusFilter[]).map((k) => <option key={k} value={k}>{FILTER_LABEL[k]}</option>)}
+          </select>
+          <input
+            value={query} onChange={(e) => setQuery(e.target.value)} placeholder="Buscar nombre, correo, teléfono o folio"
+            aria-label="Buscar compras"
+            className="min-w-0 flex-1 rounded-full border border-line bg-surface/40 px-4 py-2 text-sm"
+          />
+          <span className="text-xs text-muted">{visible.length} de {orders.length}</span>
+        </div>
+      )}
+
       {orders.length === 0 ? (
         <p className="text-sm text-muted">Aún no hay órdenes.</p>
+      ) : visible.length === 0 ? (
+        <p className="text-sm text-muted">Ninguna orden coincide con los filtros.</p>
       ) : (
         <div className="space-y-2">
-          {orders.map((o) => (
+          {visible.map((o) => (
             <div key={o.id} className="flex items-center justify-between rounded-2xl border border-line bg-surface/40 px-4 py-3 text-sm">
               <div className="min-w-0">
                 <div className="font-medium">{o.buyer_name || o.buyer_email}</div>
@@ -163,9 +185,10 @@ function StatusBadge({ status }: { status: string }) {
     paid: "bg-emerald-500/10 text-emerald-300",
     refunded: "bg-gold/10 text-gold",
     pending: "bg-surface-2 text-muted",
+    awaiting_payment: "bg-gold/10 text-gold",
     failed: "bg-fuchsia/10 text-fuchsia",
     cancelled: "bg-fuchsia/10 text-fuchsia",
   };
-  const label: Record<string, string> = { paid: "Pagada", refunded: "Reembolsada", pending: "Pendiente", failed: "Fallida", cancelled: "Cancelada" };
+  const label: Record<string, string> = { paid: "Pagada", refunded: "Reembolsada", pending: "Pendiente", awaiting_payment: "Pendiente de pago", failed: "Fallida", cancelled: "Cancelada" };
   return <span className={`rounded-full px-2 py-0.5 text-[11px] font-medium ${map[status] ?? "bg-surface-2 text-muted"}`}>{label[status] ?? status}</span>;
 }
