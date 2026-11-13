@@ -60,7 +60,9 @@ jobs:
 
       - name: Sin VERCEL_TOKEN → aviso (inerte, rollback manual)
         if: ${{ steps.confirm.outputs.still_down == 'true' && env.VERCEL_TOKEN == '' }}
-        run: echo "::warning::Prod sigue en rojo tras el deploy pero no hay VERCEL_TOKEN. Rollback manual: docs/RELIABILITY.md §4."
+        # Bloque literal: un ': ' dentro de un escalar plano rompe el YAML del workflow.
+        run: |
+          echo "::warning::Prod sigue en rojo tras el deploy pero no hay VERCEL_TOKEN. Rollback manual: docs/RELIABILITY.md §4."
 
       - name: Revertir al deploy anterior (LAST KNOWN GOOD)
         if: ${{ steps.confirm.outputs.still_down == 'true' && env.VERCEL_TOKEN != '' }}
@@ -71,4 +73,6 @@ jobs:
 
       - name: Prod se recuperó sola → no revierto
         if: ${{ steps.confirm.outputs.still_down == 'false' }}
-        run: echo "::notice::La caída fue transitoria; prod respondió sana en la reconfirmación. Sin rollback."
+        # Bloque literal: un ': ' dentro de un escalar plano rompe el YAML del workflow.
+        run: |
+          echo "::notice::La caída fue transitoria; prod respondió sana en la reconfirmación. Sin rollback."
