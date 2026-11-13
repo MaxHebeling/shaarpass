@@ -144,7 +144,12 @@ export function StaffCheckinApp({ token, staffName, gate, event }: { token: stri
         if (cancelled) await s.stop();
       } catch { setCameraError(true); }
     })();
-    return () => { cancelled = true; scanner?.stop().catch(() => {}); };
+    return () => {
+      cancelled = true;
+      // html5-qrcode lanza de forma SÍNCRONA si la cámara nunca arrancó (sin permiso,
+      // sin cámara o aún iniciando); sin el try, cambiar a "Buscar" tumbaba la página.
+      try { scanner?.stop().catch(() => {}); } catch { /* no estaba corriendo */ }
+    };
   }, [tab, submit]);
 
   // Búsqueda manual (debounce).
